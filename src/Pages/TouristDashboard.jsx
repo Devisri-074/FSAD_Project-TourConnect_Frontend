@@ -28,7 +28,7 @@ function TouristDashboard() {
     .map(b => ({
       city: b.city,
       name: b.homestayName,
-      status: b.status
+      status: b.homestayStatus || "pending"
     }));
 
   const openModal = (title, filterFn) => {
@@ -60,7 +60,8 @@ function TouristDashboard() {
   }, [activeChat, user]);
 
   const openChat = (name, city, type) => {
-    setActiveChat({ name, city, type });
+    const cityKey = city?.toLowerCase().trim();
+    setActiveChat({ name, city: cityKey, type });
     setActiveTab("Messages");
   };
 
@@ -104,10 +105,21 @@ function TouristDashboard() {
   const storedBookings = localStorage.getItem("savedPlans");
   const bookingsData = storedBookings ? JSON.parse(storedBookings) : [];
 
+  const computeOverallStatus = (b) => {
+     const hasGuide = b.guideName && b.guideName !== "N/A";
+     const hasHomestay = b.homestayName && b.homestayName !== "N/A";
+     if (!hasGuide && !hasHomestay) return "pending";
+     let gStatus = hasGuide ? (b.guideStatus?.toLowerCase() || "pending") : "confirmed";
+     let hStatus = hasHomestay ? (b.homestayStatus?.toLowerCase() || "pending") : "confirmed";
+     if (gStatus === "rejected" || hStatus === "rejected") return "rejected";
+     if (gStatus === "confirmed" && hStatus === "confirmed") return "confirmed";
+     return "pending";
+  };
+
   const userBookings = bookingsData.filter((b) => {
     if (!b.userEmail || !currentUser.email) return false;
     return b.userEmail.toLowerCase().trim() === currentUser.email.toLowerCase().trim();
-  });
+  }).map(b => ({ ...b, status: computeOverallStatus(b) }));
 
   setBookings(userBookings);
 
@@ -120,7 +132,18 @@ function TouristDashboard() {
     .then(data => {
       if(data && data.length > 0) {
         setBookings(prev => {
-          const backendData = data;
+           const backendData = data.map(d => {
+             const localMatch = prev.find(p => p.city?.toLowerCase() === d.city?.toLowerCase() && p.startDate?.split('T')[0] === d.startDate?.split('T')[0]);
+             const result = {
+                ...d,
+                guideName: d.guideName && d.guideName !== "N/A" ? d.guideName : (localMatch?.guideName || "N/A"),
+                homestayName: d.homestayName && d.homestayName !== "N/A" ? d.homestayName : (localMatch?.homestayName || "N/A"),
+                guideStatus: d.guideStatus || localMatch?.guideStatus,
+                homestayStatus: d.homestayStatus || localMatch?.homestayStatus
+             };
+             result.status = computeOverallStatus(result);
+             return result;
+          });
           const purelyOffline = prev.filter(p => !backendData.find(d => {
              const sameCity = d.city?.toLowerCase() === p.city?.toLowerCase();
              const dStart = d.startDate?.split('T')[0];
@@ -140,7 +163,18 @@ function TouristDashboard() {
                  const matching = data.filter(d => d.userEmail?.toLowerCase() === currentUser.email.toLowerCase());
                  if(matching.length > 0) {
                     setBookings(prev => {
-                      const backendData = matching;
+                      const backendData = matching.map(d => {
+                         const localMatch = prev.find(p => p.city?.toLowerCase() === d.city?.toLowerCase() && p.startDate?.split('T')[0] === d.startDate?.split('T')[0]);
+                         const result = {
+                            ...d,
+                            guideName: d.guideName && d.guideName !== "N/A" ? d.guideName : (localMatch?.guideName || "N/A"),
+                            homestayName: d.homestayName && d.homestayName !== "N/A" ? d.homestayName : (localMatch?.homestayName || "N/A"),
+                            guideStatus: d.guideStatus || localMatch?.guideStatus,
+                            homestayStatus: d.homestayStatus || localMatch?.homestayStatus
+                         };
+                         result.status = computeOverallStatus(result);
+                         return result;
+                      });
                       const purelyOffline = prev.filter(p => !backendData.find(d => {
                          const sameCity = d.city?.toLowerCase() === p.city?.toLowerCase();
                          const dStart = d.startDate?.split('T')[0];
@@ -151,7 +185,8 @@ function TouristDashboard() {
                     });
                  }
               }
-          }).catch(innerErr => console.error("No backend bookings: ", innerErr));
+          })
+          .catch(err2 => console.error("Guide check failed: ", err2));
     });
 
 }, [navigate]);
@@ -161,7 +196,14 @@ function TouristDashboard() {
     navigate("/", { replace: true });
   };
 
-  if (!user) return null;
+  if (!user) return (
+    <div className="min-h-screen flex items-center justify-center bg-slate-900 text-white">
+      <div className="text-center">
+        <div className="w-16 h-16 border-4 border-yellow-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+        <p className="text-xl font-semibold">Loading Dashboard...</p>
+      </div>
+    </div>
+  );
 
   return (
     <div className="flex min-h-screen font-sans mt-16 text-gray-800 relative z-0">
@@ -230,8 +272,8 @@ function TouristDashboard() {
             {/* 🔥 STATS */}
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
               <StatCard title="Total Trips" value={bookings.length} onClick={() => openModal("Total Trips", () => true)} />
-              <StatCard title="Confirmed" value={bookings.filter(b => b.status === "confirmed").length} onClick={() => openModal("Confirmed Bookings", b => b.status === "confirmed")} />
-              <StatCard title="Pending" value={bookings.filter(b => b.status === "pending").length} onClick={() => openModal("Pending Bookings", b => b.status === "pending")} />
+              <StatCard title="Confirmed" value={bookings.filter(b => b.status?.toLowerCase() === "confirmed").length} onClick={() => openModal("Confirmed Bookings", b => b.status?.toLowerCase() === "confirmed")} />
+              <StatCard title="Pending" value={bookings.filter(b => b.status?.toLowerCase() === "pending").length} onClick={() => openModal("Pending Bookings", b => b.status?.toLowerCase() === "pending")} />
               <StatCard title="Cities Visited" value={userCities.length} onClick={() => openModal("Cities Visited", () => true)} />
             </div>
 
@@ -452,8 +494,8 @@ function TouristDashboard() {
                            <h3 className="text-base font-semibold text-gray-900 flex items-center gap-2">
                              <span className="capitalize">{b.city}</span>
                            </h3>
-                           <span className={`px-2.5 py-1 rounded text-xs font-medium border ${b.status === "confirmed" ? "bg-green-50 text-green-700 border-green-100" : "bg-orange-50 text-orange-700 border-orange-100"}`}>
-                             {b.status.charAt(0).toUpperCase() + b.status.slice(1)}
+                           <span className={`px-2.5 py-1 rounded text-xs font-medium border ${b.status?.toLowerCase() === "confirmed" ? "bg-green-50 text-green-700 border-green-100" : "bg-orange-50 text-orange-700 border-orange-100"}`}>
+                             {b.status ? b.status.charAt(0).toUpperCase() + b.status.slice(1).toLowerCase() : "Pending"}
                            </span>
                         </div>
                         <div className="p-5">
@@ -461,6 +503,18 @@ function TouristDashboard() {
                             <Clock size={14}/>
                             {new Date(b.startDate).toLocaleDateString()} - {new Date(b.endDate).toLocaleDateString()}
                           </p>
+                          
+                          {b.homestayName && b.homestayName !== "N/A" && (
+                            <p className="text-sm text-gray-600 mb-2 flex items-center gap-2">
+                              <span className="font-medium text-gray-800">🏡 Homestay:</span> {b.homestayName}
+                            </p>
+                          )}
+                          
+                          {b.guideName && b.guideName !== "N/A" && (
+                            <p className="text-sm text-gray-600 mb-3 flex items-center gap-2">
+                              <span className="font-medium text-gray-800">👨‍🏫 Guide:</span> {b.guideName}
+                            </p>
+                          )}
                           
                           {b.selectedPlaces && b.selectedPlaces.length > 0 && (
                             <div className="mt-4 pt-3 border-t border-gray-100">
@@ -533,8 +587,8 @@ function TripCard({ b, onContactHost }) {
             {new Date(b.startDate).toLocaleDateString()}
           </p>
         </div>
-        <span className={`px-2.5 py-1 rounded text-xs font-medium border ${b.status === "confirmed" ? "bg-green-50 text-green-700 border-green-100" : b.status === "rejected" ? "bg-red-50 text-red-700 border-red-100" : "bg-orange-50 text-orange-700 border-orange-100"}`}>
-          {b.status?.charAt(0).toUpperCase() + b.status?.slice(1)}
+        <span className={`px-2.5 py-1 rounded text-xs font-medium border ${b.status?.toLowerCase() === "confirmed" ? "bg-green-50 text-green-700 border-green-100" : b.status?.toLowerCase() === "rejected" ? "bg-red-50 text-red-700 border-red-100" : "bg-orange-50 text-orange-700 border-orange-100"}`}>
+          {b.status ? b.status.charAt(0).toUpperCase() + b.status.slice(1).toLowerCase() : "Pending"}
         </span>
       </div>
       {hName && onContactHost && (

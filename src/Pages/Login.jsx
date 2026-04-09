@@ -1,19 +1,20 @@
 import { useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
-import { MapPin } from "lucide-react";
+import { MapPin, Eye, EyeOff } from "lucide-react";
 
 function Login() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
 
   const location = useLocation();
+  const [showPassword, setShowPassword] = useState(false);
   const navigate = useNavigate();
 
   const handleLogin = async (e) => {
   e.preventDefault();
 
   try {
-    const response = await fetch("http://localhost:8080/api/auth/login", {
+    const response = await fetch("/api/auth/login", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -26,6 +27,15 @@ function Login() {
     if (data && data.id) {
       const allUsers = JSON.parse(localStorage.getItem("users")) || [];
       const localUser = allUsers.find(u => u.email.toLowerCase() === email.toLowerCase());
+
+      // ✅ CHECK APPROVAL STATUS
+      const userRole = (data.role || localUser?.role || "TOURIST").toLowerCase();
+      const userStatus = data.approvalStatus || localUser?.approvalStatus || "approved";
+
+      if (userRole !== "tourist" && userRole !== "admin" && userStatus !== "approved") {
+        alert(userStatus === "rejected" ? "Your account has been rejected by Admin." : "Your account is pending Admin approval.");
+        return;
+      }
 
       localStorage.setItem("user", JSON.stringify({
         ...data,
@@ -42,6 +52,12 @@ function Login() {
       const localUser = allUsers.find(u => u.email.toLowerCase() === email.toLowerCase() && u.password === password);
       
       if (localUser) {
+         // ✅ CHECK APPROVAL STATUS
+         if (localUser.role !== "tourist" && localUser.role !== "admin" && localUser.approvalStatus !== "approved") {
+            alert(localUser.approvalStatus === "rejected" ? "Your account has been rejected by Admin." : "Your account is pending Admin approval.");
+            return;
+         }
+
          const roleMap = { admin: "ADMIN", tourist: "TOURIST", guide: "GUIDE", host: "HOST" };
          const userRoleMapping = roleMap[localUser.role.toLowerCase()] || "TOURIST";
          const fakeData = { 
@@ -71,6 +87,12 @@ function Login() {
     const localUser = allUsers.find(u => u.email.toLowerCase() === email.toLowerCase() && u.password === password);
     
     if (localUser) {
+       // ✅ CHECK APPROVAL STATUS
+       if (localUser.role !== "tourist" && localUser.role !== "admin" && localUser.approvalStatus !== "approved") {
+          alert(localUser.approvalStatus === "rejected" ? "Your account has been rejected by Admin." : "Your account is pending Admin approval.");
+          return;
+       }
+
        const roleMap = { admin: "ADMIN", tourist: "TOURIST", guide: "GUIDE", host: "HOST" };
        const userRoleMapping = roleMap[localUser.role.toLowerCase()] || "TOURIST";
        const fakeData = { 
@@ -205,20 +227,40 @@ const routeUser = (role) => {
                 </span>
               </div>
 
-              <input
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required
-                style={{
-                  width: "100%",
-                  padding: "10px",
-                  borderRadius: "8px",
-                  border: "1px solid rgba(255,255,255,0.3)",
-                  background: "rgba(255,255,255,0.1)",
-                  color: "white",
-                }}
-              />
+              <div style={{ position: 'relative' }}>
+                <input
+                  type={showPassword ? "text" : "password"}
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  required
+                  style={{
+                    width: "100%",
+                    padding: "10px 40px 10px 10px",
+                    borderRadius: "8px",
+                    border: "1px solid rgba(255,255,255,0.3)",
+                    background: "rgba(255,255,255,0.1)",
+                    color: "white",
+                  }}
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  style={{
+                    position: 'absolute',
+                    right: '10px',
+                    top: '50%',
+                    transform: 'translateY(-50%)',
+                    background: 'none',
+                    border: 'none',
+                    color: 'rgba(255,255,255,0.5)',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center'
+                  }}
+                >
+                  {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                </button>
+              </div>
             </div>
 
             <button

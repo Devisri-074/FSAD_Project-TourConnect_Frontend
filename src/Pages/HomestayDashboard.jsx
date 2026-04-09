@@ -141,10 +141,10 @@ useEffect(() => {
 
   const handleUpdateStatus = (tourId, newStatus) => {
     const storedBookings = JSON.parse(localStorage.getItem("savedPlans")) || [];
-    const updatedBookings = storedBookings.map(b => b.id === tourId ? { ...b, status: newStatus } : b);
+    const updatedBookings = storedBookings.map(b => b.id === tourId ? { ...b, homestayStatus: newStatus } : b);
     localStorage.setItem("savedPlans", JSON.stringify(updatedBookings));
     
-    setReservedStays(prev => prev.map(t => t.id === tourId ? { ...t, status: newStatus } : t));
+    setReservedStays(prev => prev.map(t => t.id === tourId ? { ...t, homestayStatus: newStatus } : t));
 
     // Attempt backend sync
     fetch(`http://localhost:8080/api/bookings/${tourId}/status`, {
@@ -165,6 +165,34 @@ useEffect(() => {
 
   if (!newPropName || !newPropCity || !newPropPrice) return;
 
+  // 🔥 ADD TO LOCALSTORAGE FOR SYNC / OFFLINE
+  const customStays = JSON.parse(localStorage.getItem("customHomestays")) || [];
+  const newStay = {
+    id: "hs_" + Date.now(),
+    name: newPropName,
+    title: newPropName,
+    city: newPropCity.toLowerCase().trim(),
+    price: Number(newPropPrice),
+    description: newPropDesc,
+    hostId: user.id,
+    hostEmail: user.email,
+    rating: 5.0,
+    approvalStatus: "pending"
+  };
+
+  customStays.push(newStay);
+  localStorage.setItem("customHomestays", JSON.stringify(customStays));
+  
+  // Update UI immediately
+  setMyStays(prev => [...prev, newStay]);
+  alert("Property submitted! Waiting for admin approval.");
+  
+  setShowAddPropertyModal(false);
+  setNewPropName("");
+  setNewPropCity("");
+  setNewPropPrice("");
+  setNewPropDesc("");
+
   try {
     const res = await fetch("http://localhost:8080/api/homestays", {
       method: "POST",
@@ -181,26 +209,23 @@ useEffect(() => {
       }),
     });
 
-    if (res.ok) {
-      alert("Property submitted! Waiting for admin approval.");
-      setShowAddPropertyModal(false);
-
-      // clear form
-      setNewPropName("");
-      setNewPropCity("");
-      setNewPropPrice("");
-      setNewPropDesc("");
-    } else {
-      alert("Failed to add property");
+    if (!res.ok) {
+      console.warn("API save returned non-ok");
     }
   } catch (err) {
-    console.error(err);
-    alert("Server error");
+    console.error("Backend offline, but property saved locally", err);
   }
 };
 
 if (!user) {
-  return <h2 style={{ color: "white" }}>Loading...</h2>;
+  return (
+    <div className="min-h-screen flex items-center justify-center bg-slate-900 text-white">
+      <div className="text-center">
+        <div className="w-16 h-16 border-4 border-yellow-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+        <p className="text-xl font-semibold">Loading Dashboard...</p>
+      </div>
+    </div>
+  );
 }
 
   return (
@@ -238,7 +263,6 @@ if (!user) {
         </div>
 
         <div className="p-4 border-t border-gray-100/60 mb-16 flex flex-col gap-1">
-          <SidebarItem icon={<ArrowLeft size={18}/>} label="Back to Home" onClick={() => navigate("/")} />
           <SidebarItem icon={<LogOut size={18}/>} label="Sign Out" onClick={handleLogout} isDanger />
         </div>
       </aside>
@@ -275,7 +299,7 @@ if (!user) {
         {/* DASHBOARD TAB */}
         {activeTab === "Dashboard" && (() => {
           const totalEarnings = reservedStays
-            .filter(t => t.status === "confirmed")
+            .filter(t => t.homestayStatus === "confirmed")
             .reduce((sum, t) => sum + t.homestayPrice, 0);
 
           return (
@@ -375,8 +399,8 @@ if (!user) {
                       <p className="text-sm text-gray-600 mb-2">Check-in: <span className="font-medium">{new Date(t.startDate).toLocaleDateString()}</span> | Check-out: <span className="font-medium">{new Date(t.endDate).toLocaleDateString()}</span></p>
                       <div className="flex items-center gap-2 mt-2">
                         <span className="text-sm font-bold text-green-700">Earnings: ₹{t.homestayPrice}</span>
-                        <span className={`text-xs px-2 py-1 rounded font-bold uppercase tracking-wider ${t.status === "confirmed" ? "bg-green-100 text-green-700" : t.status === "rejected" ? "bg-red-100 text-red-700" : "bg-yellow-100 text-yellow-700"}`}>
-                          {t.status || "PENDING"}
+                        <span className={`text-xs px-2 py-1 rounded font-bold uppercase tracking-wider ${t.homestayStatus === "confirmed" ? "bg-green-100 text-green-700" : t.homestayStatus === "rejected" ? "bg-red-100 text-red-700" : "bg-yellow-100 text-yellow-700"}`}>
+                          {t.homestayStatus || "PENDING"}
                         </span>
                       </div>
                     </div>
@@ -386,7 +410,7 @@ if (!user) {
                          <MessageSquare size={16} /> Contact Guest
                       </button>
                       
-                      {(!t.status || t.status === "pending") && (
+                      {(!t.homestayStatus || t.homestayStatus === "pending") && (
                         <>
                           <button onClick={() => handleUpdateStatus(t.id, "confirmed")} className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 text-sm font-medium transition w-full md:w-auto">
                             Accept
@@ -445,7 +469,7 @@ if (!user) {
 
         {/* EARNINGS TAB */}
         {activeTab === "Earnings" && (() => {
-          const confirmedTours = reservedStays.filter(t => t.status === "confirmed");
+          const confirmedTours = reservedStays.filter(t => t.homestayStatus === "confirmed");
           const totalEarnings = confirmedTours.reduce((sum, t) => sum + t.homestayPrice, 0);
 
           return (

@@ -187,36 +187,32 @@ function Plan() {
     const guideNameFromStorage =
       localStorage.getItem(`guideName_${city.toLowerCase().trim()}`) || "N/A";
 
-    console.log({
-      city,
-      homestayName,
-      guideName: guideNameFromStorage,
-      userEmail: currentUser.email,
-      startDate,
-      endDate,
-      homestayPrice,
-      guidePrice
-    });
+    const homestayNameFromStorage =
+      localStorage.getItem(`homestayName_${city.toLowerCase().trim()}`) || "N/A";
 
-    await fetch("http://localhost:8080/api/bookings", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        city: city,
-        homestayName: homestayName,
-        guideName: guideNameFromStorage, // ✅ FIXED
-        userEmail: currentUser.email,
-        startDate: startDate,
-        endDate: endDate,
-        homestayPrice: homestayPrice,
-        guidePrice: guidePrice,
-        hostId: 1,
-      }),
-    });
+    try {
+      await fetch("http://localhost:8080/api/bookings", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          city: city,
+          homestayName: homestayNameFromStorage,
+          guideName: guideNameFromStorage,
+          userEmail: currentUser.email,
+          startDate: startDate,
+          endDate: endDate,
+          homestayPrice: homestayPrice,
+          guidePrice: guidePrice,
+          hostId: 1,
+        }),
+      });
+    } catch (error) {
+      console.warn("Backend offline, plan saved locally.");
+    }
 
-    setPopupMessage("Booking confirmed! 🎉 Check host dashboard");
+    setPopupMessage("Plan Saved Successfully!");
     setShowPopup(true);
   };
 
@@ -424,6 +420,8 @@ function Plan() {
                   if (redirectToLogin) {
                     navigate("/login", { state: { from: "/plan" } });
                     setRedirectToLogin(false);
+                  } else if (popupMessage.includes("Plan Saved") || popupMessage.includes("Plan already saved")) {
+                    navigate("/dashboard");
                   }
                 }}
                 className="bg-blue-500 text-white px-4 py-2 rounded"

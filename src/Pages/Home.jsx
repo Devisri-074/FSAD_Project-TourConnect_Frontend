@@ -1,10 +1,10 @@
 import { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { MapPin } from "lucide-react"; 
 
 function Home() {
-  // ✅ CHECK LOGIN
-  const currentUser = JSON.parse(localStorage.getItem("currentUser"));
+  const navigate = useNavigate();
+
 
   const images = [
     "https://images.unsplash.com/photo-1501785888041-af3ef285b470",

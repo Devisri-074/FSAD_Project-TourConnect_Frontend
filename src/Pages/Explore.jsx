@@ -1,13 +1,13 @@
-import { useState } from "react";
-import { Link } from "react-router-dom";
+import { useState, useEffect } from "react";
+import { Link, useNavigate } from "react-router-dom";
 import { MapPin, Search } from "lucide-react";
 import { citiesByState } from "../data/cities";
 
 function Explore() {
   const [searchQuery, setSearchQuery] = useState("");
 
-  // ✅ CHECK LOGIN
-  const currentUser = JSON.parse(localStorage.getItem("currentUser"));
+  const navigate = useNavigate();
+
 
   const allCities = Object.entries(citiesByState).flatMap(
     ([stateSlug, cities]) =>

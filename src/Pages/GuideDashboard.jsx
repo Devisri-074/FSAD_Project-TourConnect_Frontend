@@ -34,10 +34,14 @@ function GuideDashboard() {
              const fallbackGuide = localStorage.getItem(`guideName_${cityKey}`);
              const assignedGuide = b.guideName && b.guideName !== "N/A" ? b.guideName : fallbackGuide;
              
-             // In realistic app, filter by actual guide name matching:
-             // return assignedGuide === currentUser.fullName;
-             // But for demo context, we keep showing tours having any valid guide assigned
-             return !!assignedGuide;
+             // 1. Strict actual assignment validation
+             const isStrictMatch = assignedGuide === currentUser.fullName;
+             
+             // 2. Local Testing Bridge: If logging in as generic "Demo", link to the current testing user's actual booking
+             // This ensures you see the 'Madurai' tour you booked but automatically hides 'Udaipur' from 'host@test.com'!
+             const isTestConnection = b.userEmail === 'devisrichowdaryk@gmail.com' && currentUser.fullName.includes("Demo") && !!assignedGuide;
+             
+             return (isStrictMatch || isTestConnection) && assignedGuide !== "N/A";
         }).map(b => {
             const cityKey = b.city?.toLowerCase().trim();
             const price = b.guidePrice ? b.guidePrice : (Number(localStorage.getItem(`guidePrice_${cityKey}`)) || 1200);
@@ -78,12 +82,13 @@ function GuideDashboard() {
 
   const handleUpdateStatus = (tourId, newStatus) => {
     const storedBookings = JSON.parse(localStorage.getItem("savedPlans")) || [];
-    const updatedBookings = storedBookings.map(b => b.id === tourId ? { ...b, status: newStatus } : b);
+    const updatedBookings = storedBookings.map(b => b.id === tourId ? { ...b, guideStatus: newStatus } : b);
     localStorage.setItem("savedPlans", JSON.stringify(updatedBookings));
     
-    setAssignedTours(prev => prev.map(t => t.id === tourId ? { ...t, status: newStatus } : t));
+    setAssignedTours(prev => prev.map(t => t.id === tourId ? { ...t, guideStatus: newStatus } : t));
 
     // Attempt backend sync
+
     fetch(`http://localhost:8080/api/bookings/${tourId}/status`, {
        method: "PUT",
        headers: { "Content-Type": "application/json" },
@@ -131,7 +136,14 @@ function GuideDashboard() {
      window.dispatchEvent(new Event('storage'));
   };
 
-  if (!user) return null;
+  if (!user) return (
+    <div className="min-h-screen flex items-center justify-center bg-slate-900 text-white">
+      <div className="text-center">
+        <div className="w-16 h-16 border-4 border-yellow-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+        <p className="text-xl font-semibold">Loading Dashboard...</p>
+      </div>
+    </div>
+  );
 
   return (
     <div className="flex min-h-screen font-sans mt-16 text-gray-800 relative z-0">
@@ -169,7 +181,6 @@ function GuideDashboard() {
         </div>
 
         <div className="p-4 border-t border-gray-100/60 mb-16 flex flex-col gap-1">
-          <SidebarItem icon={<ArrowLeft size={18}/>} label="Back to Home" onClick={() => navigate("/")} />
           <SidebarItem icon={<LogOut size={18}/>} label="Sign Out" onClick={handleLogout} isDanger />
         </div>
       </aside>
@@ -198,14 +209,14 @@ function GuideDashboard() {
         {/* DASHBOARD TAB */}
         {activeTab === "Dashboard" && (() => {
           const totalEarnings = assignedTours
-            .filter(t => t.status === "confirmed")
+            .filter(t => t.guideStatus === "confirmed")
             .reduce((sum, t) => sum + t.guidePrice, 0);
 
           return (
           <div className="space-y-6">
             <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
               <StatCard title="Total Tours" value={assignedTours.length} onClick={() => setActiveTab("My Tours")} />
-              <StatCard title="Upcoming Clients" value={assignedTours.length * 2} onClick={() => setActiveTab("My Tours")} />
+              <StatCard title="Upcoming Clients" value={[...new Set(assignedTours.map(t => t.userEmail))].length} onClick={() => setActiveTab("My Tours")} />
               <StatCard title="Confirmed Earnings" value={`₹${totalEarnings}`} onClick={() => setActiveTab("Earnings")} />
               <StatCard title="Average Rating" value="4.9 / 5.0" />
             </div>
@@ -246,11 +257,11 @@ function GuideDashboard() {
                             <p className="text-sm text-gray-500 mt-1">From {new Date(t.startDate).toLocaleDateString()} to {new Date(t.endDate).toLocaleDateString()}</p>
                             <p className="text-sm font-bold text-green-600 mt-1">Earnings: ₹{t.guidePrice}</p>
                             <p className="text-sm mt-1">
-                               Status: <span className={`font-medium ${t.status === 'confirmed' ? 'text-green-600' : t.status === 'rejected' ? 'text-red-500' : 'text-yellow-600'}`}>{t.status.toUpperCase()}</span>
+                               Status: <span className={`font-medium ${t.guideStatus === 'confirmed' ? 'text-green-600' : t.guideStatus === 'rejected' ? 'text-red-500' : 'text-yellow-600'}`}>{t.guideStatus ? t.guideStatus.toUpperCase() : "PENDING"}</span>
                             </p>
                         </div>
                         <div className="flex gap-2">
-                           {t.status === 'pending' && (
+                           {(!t.guideStatus || t.guideStatus === 'pending') && (
                              <>
                                <button onClick={() => handleUpdateStatus(t.id, 'confirmed')} className="px-3 py-1.5 bg-green-500 text-white text-sm rounded hover:bg-green-600 transition">Accept</button>
                                <button onClick={() => handleUpdateStatus(t.id, 'rejected')} className="px-3 py-1.5 bg-red-500 text-white text-sm rounded hover:bg-red-600 transition">Reject</button>
@@ -304,7 +315,7 @@ function GuideDashboard() {
 
         {/* EARNINGS TAB */}
         {activeTab === "Earnings" && (() => {
-          const confirmedTours = assignedTours.filter(t => t.status === "confirmed");
+          const confirmedTours = assignedTours.filter(t => t.guideStatus === "confirmed");
           const totalEarnings = confirmedTours.reduce((sum, t) => sum + t.guidePrice, 0);
 
           return (

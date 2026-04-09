@@ -86,6 +86,33 @@ function AdminDashboard() {
 
   }, [navigate]);
 
+  // 🔥 Ensure fresh data when clicking tabs
+  useEffect(() => {
+     if(activeTab === "Property Requests" || activeTab === "Active Properties") {
+        const customStays = JSON.parse(localStorage.getItem("customHomestays")) || [];
+        setPropertyRequests(prev => {
+           const merged = [...prev];
+           customStays.forEach(c => {
+              const idx = merged.findIndex(m => m.id === c.id);
+              if(idx === -1) merged.push(c);
+              else merged[idx] = c;
+           });
+           return merged;
+        });
+     } else if (activeTab === "All Bookings") {
+        const storedBookings = JSON.parse(localStorage.getItem("savedPlans")) || [];
+        setAllPlans(prev => {
+           const merged = [...prev];
+           storedBookings.forEach(c => {
+              const idx = merged.findIndex(m => m.id === c.id);
+              if(idx === -1) merged.push(c);
+              else merged[idx] = c;
+           });
+           return merged;
+        });
+     }
+  }, [activeTab]);
+
   const handleUpdatePropertyStatus = (index, newStatus) => {
     // Read the array fresh from localstorage to ensure exact index matching!
     const customStays = JSON.parse(localStorage.getItem("customHomestays")) || [];
@@ -135,7 +162,14 @@ function AdminDashboard() {
     navigate("/", { replace: true });
   };
 
-  if (!user) return null;
+  if (!user) return (
+    <div className="min-h-screen flex items-center justify-center bg-slate-900 text-white">
+      <div className="text-center">
+        <div className="w-16 h-16 border-4 border-yellow-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+        <p className="text-xl font-semibold">Loading Dashboard...</p>
+      </div>
+    </div>
+  );
 
   return (
     <div className="flex min-h-screen font-sans mt-16 text-gray-800 relative z-0">

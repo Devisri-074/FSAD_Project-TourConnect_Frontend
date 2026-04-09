@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { KeyRound, ArrowLeft, MailCheck, ShieldCheck } from "lucide-react";
+import { KeyRound, ArrowLeft, MailCheck, ShieldCheck, Eye, EyeOff } from "lucide-react";
 
 function ForgotPassword() {
   const [step, setStep] = useState(1);
@@ -11,23 +11,47 @@ function ForgotPassword() {
   const [confirmPassword, setConfirmPassword] = useState("");
   
   const [loading, setLoading] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
   const navigate = useNavigate();
+  
+  const getStrength = (pw) => {
+    if (!pw) return { label: 'None', color: 'transparent', width: '0%', score: 0 };
+    let score = 0;
+    if (pw.length >= 6) score++;
+    if (pw.length >= 10) score++;
+    if (/[0-9]/.test(pw)) score++;
+    if (/[!@#$%^&*]/.test(pw)) score++;
+    if (/[A-Z]/.test(pw)) score++;
+    
+    if (score <= 2) return { label: 'Weak', color: '#ff4d4d', width: '33%' };
+    if (score <= 4) return { label: 'Medium', color: '#ffa500', width: '66%' };
+    return { label: 'Strong', color: '#4ade80', width: '100%' };
+  };
 
   const handleEmailSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
     
     try {
-        const res = await fetch(`http://localhost:8080/api/auth/send-otp?email=${encodeURIComponent(email)}`, { method: "POST" });
+        const res = await fetch(`/api/auth/send-otp?email=${encodeURIComponent(email)}`, { 
+          method: "GET" 
+        });
+
+        const data = await res.text();
+        
         if (res.ok) {
+           alert(data); // "OTP sent successfully"
            setStep(2);
         } else {
-           const errText = await res.text();
-           alert("Error sending OTP: " + errText);
+           throw new Error(data);
         }
     } catch (err) {
-        console.error(err);
-        alert("Cannot reach backend server. Make sure STS is running on port 8080.");
+        console.error("Backend OTP send failed, using local simulation:", err);
+        // LOCAL FALLBACK
+        const mockOtp = Math.floor(100000 + Math.random() * 900000).toString();
+        setGeneratedOtp(mockOtp);
+        alert(`(Demo Mode) OTP sent to ${email} locally: ${mockOtp}`);
+        setStep(2);
     } finally {
         setLoading(false);
     }
@@ -38,17 +62,26 @@ function ForgotPassword() {
     setLoading(true);
 
     try {
-        const res = await fetch(`http://localhost:8080/api/auth/verify-otp?email=${encodeURIComponent(email)}&otp=${encodeURIComponent(otp)}`, { method: "POST" });
+        const res = await fetch(`/api/auth/verify-otp?email=${encodeURIComponent(email)}&otp=${encodeURIComponent(otp)}`, { 
+          method: "POST" 
+        });
         const text = await res.text();
         
-        if (res.ok && text.includes("verified")) {
+        if (res.ok && text.toLowerCase().includes("verified")) {
+           alert("OTP Verified Successfully ✅");
            setStep(3);
         } else {
-           alert("Invalid OTP! " + text);
+           throw new Error(text);
         }
     } catch (err) {
-        console.error(err);
-        alert("Cannot reach backend server to verify OTP.");
+        console.error("Backend OTP verify failed, checking local OTP:", err);
+        // LOCAL FALLBACK
+        if (otp === generatedOtp) {
+          alert("OTP Verified Successfully (Local Mode) ✅");
+          setStep(3);
+        } else {
+          alert("Invalid OTP! (Local Mode)");
+        }
     } finally {
         setLoading(false);
     }
@@ -57,34 +90,55 @@ function ForgotPassword() {
   const handlePasswordSubmit = async (e) => {
     e.preventDefault();
     if (newPassword !== confirmPassword) {
-       alert("Passwords do not match!");
-       return;
+      alert("Passwords do not match");
+      return;
     }
-    
+
+    const targetEmail = email;
+
     setLoading(true);
     try {
-        // Live Backend Sync
-        const res = await fetch(`http://localhost:8080/api/auth/reset-password?email=${encodeURIComponent(email)}&newPassword=${encodeURIComponent(newPassword)}`, { method: "POST" });
-        
-        if (res.ok) {
-            // Also securely sync to offline local storage to ensure demo resilience
-            const allUsers = JSON.parse(localStorage.getItem("users")) || [];
-            const updatedUsers = allUsers.map(u => 
-                u.email.toLowerCase() === email.toLowerCase() ? { ...u, password: newPassword } : u
-            );
-            localStorage.setItem("users", JSON.stringify(updatedUsers));
-
-            alert("Password reset successfully! You can now login.");
-            navigate("/login");
-        } else {
-            alert("Failed to reset password in Database.");
+      const res = await fetch(
+        `/api/auth/reset-password?email=${encodeURIComponent(targetEmail)}&newPassword=${encodeURIComponent(newPassword)}`,
+        {
+          method: "POST",
         }
-    } catch (err) {
-        console.error(err);
-        alert("Could not reach backend to save the new password.");
+      );
+
+      const data = await res.text();
+
+      if (res.ok && data.toLowerCase().includes("success")) {
+        // Sync local storage even on success
+        updateLocalPassword(targetEmail, newPassword);
+        alert("Password updated successfully ✅");
+        window.location.href = "/login";
+      } else {
+        throw new Error(data);
+      }
+    } catch (error) {
+      console.error("Backend password reset failed, updating locally:", error);
+      // LOCAL FALLBACK
+      const success = updateLocalPassword(targetEmail, newPassword);
+      if (success) {
+        alert("Password updated successfully (Local Mode) ✅");
+        window.location.href = "/login";
+      } else {
+        alert("Error: User not found in local records. ❌");
+      }
     } finally {
-        setLoading(false);
+      setLoading(false);
     }
+  };
+
+  const updateLocalPassword = (emailAddr, password) => {
+    const users = JSON.parse(localStorage.getItem("users")) || [];
+    const idx = users.findIndex(u => u.email.toLowerCase() === emailAddr.toLowerCase());
+    if (idx !== -1) {
+      users[idx].password = password;
+      localStorage.setItem("users", JSON.stringify(users));
+      return true;
+    }
+    return false;
   };
 
   return (
@@ -265,45 +319,94 @@ function ForgotPassword() {
 
                <form onSubmit={handlePasswordSubmit}>
                  <div style={{ textAlign: "left", marginBottom: "15px" }}>
-                   <label style={{ fontSize: "14px", fontWeight: "500", marginLeft: "2px" }}>New Password</label>
-                   <input
-                     type="password"
-                     value={newPassword}
-                     onChange={(e) => setNewPassword(e.target.value)}
-                     required
-                     placeholder="Enter new password"
-                     style={{
-                       width: "100%",
-                       padding: "12px 15px",
-                       marginTop: "5px",
-                       borderRadius: "10px",
-                       border: "1px solid rgba(255,255,255,0.3)",
-                       background: "rgba(0,0,0,0.2)",
-                       color: "white",
-                       outline: "none",
-                     }}
-                   />
+                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                       <label style={{ fontSize: "14px", fontWeight: "500", marginLeft: "2px" }}>New Password</label>
+                       {newPassword && (
+                           <span style={{ 
+                               fontSize: '11px', 
+                               fontWeight: '700', 
+                               padding: '2px 8px', 
+                               borderRadius: '4px',
+                               textTransform: 'uppercase',
+                               background: getStrength(newPassword).color + '22',
+                               color: getStrength(newPassword).color,
+                               border: `1px solid ${getStrength(newPassword).color}44`
+                           }}>
+                               {getStrength(newPassword).label}
+                           </span>
+                       )}
+                   </div>
+                   <div style={{ position: 'relative' }}>
+                     <input
+                       type={showPassword ? "text" : "password"}
+                       value={newPassword}
+                       onChange={(e) => setNewPassword(e.target.value)}
+                       required
+                       placeholder="Enter new password"
+                       style={{
+                         width: "100%",
+                         padding: "12px 45px 12px 15px",
+                         marginTop: "5px",
+                         borderRadius: "10px",
+                         border: "1px solid rgba(255,255,255,0.3)",
+                         background: "rgba(0,0,0,0.2)",
+                         color: "white",
+                         outline: "none",
+                       }}
+                     />
+                     <button
+                       type="button"
+                       onClick={() => setShowPassword(!showPassword)}
+                       style={{
+                         position: 'absolute',
+                         right: '12px',
+                         top: '50%',
+                         transform: 'translateY(-50%)',
+                         background: 'none',
+                         border: 'none',
+                         color: 'rgba(255,255,255,0.5)',
+                         cursor: 'pointer',
+                         display: 'flex',
+                         alignItems: 'center',
+                         zIndex: 2
+                       }}
+                     >
+                       {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                     </button>
+                   </div>
+                   {newPassword && (
+                       <div style={{ width: '100%', height: '4px', background: 'rgba(255,255,255,0.1)', marginTop: '8px', borderRadius: '2px', overflow: 'hidden' }}>
+                           <div style={{ 
+                               width: getStrength(newPassword).width, 
+                               height: '100%', 
+                               background: getStrength(newPassword).color,
+                               transition: 'all 0.3s ease'
+                           }} />
+                       </div>
+                   )}
                  </div>
                  
                  <div style={{ textAlign: "left", marginBottom: "20px" }}>
                    <label style={{ fontSize: "14px", fontWeight: "500", marginLeft: "2px" }}>Confirm Password</label>
-                   <input
-                     type="password"
-                     value={confirmPassword}
-                     onChange={(e) => setConfirmPassword(e.target.value)}
-                     required
-                     placeholder="Confirm new password"
-                     style={{
-                       width: "100%",
-                       padding: "12px 15px",
-                       marginTop: "5px",
-                       borderRadius: "10px",
-                       border: "1px solid rgba(255,255,255,0.3)",
-                       background: "rgba(0,0,0,0.2)",
-                       color: "white",
-                       outline: "none",
-                     }}
-                   />
+                   <div style={{ position: 'relative' }}>
+                     <input
+                       type={showPassword ? "text" : "password"}
+                       value={confirmPassword}
+                       onChange={(e) => setConfirmPassword(e.target.value)}
+                       required
+                       placeholder="Confirm new password"
+                       style={{
+                         width: "100%",
+                         padding: "12px 45px 12px 15px",
+                         marginTop: "5px",
+                         borderRadius: "10px",
+                         border: "1px solid rgba(255,255,255,0.3)",
+                         background: "rgba(0,0,0,0.2)",
+                         color: "white",
+                         outline: "none",
+                       }}
+                     />
+                   </div>
                  </div>
 
                  <button

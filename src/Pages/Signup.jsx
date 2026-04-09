@@ -30,6 +30,8 @@ function Signup() {
     return;
   }
 
+  const roleNeedsApproval = form.role.toLowerCase() === "guide" || form.role.toLowerCase() === "host";
+
   const existingUsers = JSON.parse(localStorage.getItem("users")) || [];
   const newUser = {
     fullName: form.fullName,
@@ -38,11 +40,12 @@ function Signup() {
     countryCode: form.countryCode,
     password: form.password,
     role: form.role.toLowerCase(),
+    approvalStatus: roleNeedsApproval ? "pending" : "approved",
     id: Date.now() // Mock ID for offline mode
   };
 
   try {
-    const response = await fetch("http://localhost:8080/api/auth/signup", {
+    const response = await fetch("/api/auth/signup", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -57,16 +60,32 @@ function Signup() {
 
     if (response.ok) {
       localStorage.setItem("users", JSON.stringify([...existingUsers, newUser]));
-      alert("Signup successful!");
+      if (roleNeedsApproval) {
+        alert("Registration request sent to Admin! You can log in once approved.");
+      } else {
+        alert("Signup successful!");
+      }
       navigate("/login");
     } else {
-      alert("Signup failed!");
+      // ✅ LOCAL FALLBACK if backend returns error
+      console.warn("Backend signup failed, falling back to local storage.");
+      localStorage.setItem("users", JSON.stringify([...existingUsers, newUser]));
+      if (roleNeedsApproval) {
+        alert("Registration request sent to Admin (Local Mode)! You can log in once approved.");
+      } else {
+        alert("Signup successful! (Local Mode)");
+      }
+      navigate("/login");
     }
   } catch (error) {
     console.error(error);
     // FALLBACK for offline demo mode
     localStorage.setItem("users", JSON.stringify([...existingUsers, newUser]));
-    alert("Signup successful! (Offline Mode)");
+    if (roleNeedsApproval) {
+      alert("Registration request sent to Admin (Offline Mode)! You can log in once approved.");
+    } else {
+      alert("Signup successful! (Offline Mode)");
+    }
     navigate("/login");
   }
 };
