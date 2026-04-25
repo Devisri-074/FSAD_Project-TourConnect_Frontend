@@ -1,268 +1,538 @@
 import { useNavigate } from "react-router-dom";
 import { useEffect, useState } from "react";
-import { 
-  MapPin, Shield, Users, BarChart3, Settings, LogOut, ArrowLeft, Globe, Home as HomeIcon, CheckCircle, Trash2, Mail, Server
+import axios from "axios";
+import {
+  MapPin, Shield, Users, BarChart3, LogOut, ArrowLeft, Globe, Home as HomeIcon, CheckCircle, Map, Plus, Settings, RefreshCw, Search, Filter, ChevronLeft, ChevronRight, Edit
 } from "lucide-react";
+import { citiesByState } from "../data/cities";
+import { attractionsByCity } from "../data/attractions";
+import { guidesByCity } from "../data/guides";
 
 function AdminDashboard() {
   const navigate = useNavigate();
 
+  console.log("🚀 TOURCONNECT ADMIN V3.0 LOADED");
+  
   const [user, setUser] = useState(null);
   const [allUsers, setAllUsers] = useState([]);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [roleFilter, setRoleFilter] = useState("all");
+  const [currentPage, setCurrentPage] = useState(1);
+  const usersPerPage = 10;
   const [allPlans, setAllPlans] = useState([]);
   const [propertyRequests, setPropertyRequests] = useState([]);
-  const [availableCities, setAvailableCities] = useState([]); // ✅ CITY MANAGEMENT
-  const [newCityName, setNewCityName] = useState("");
-  const [customAttractions, setCustomAttractions] = useState({}); // ✅ ATTRACTION MANAGEMENT
-  const [attractionForm, setAttractionForm] = useState({ city: "", name: "", desc: "", duration: "2 hrs", entry: "Free" });
   const [selectedBooking, setSelectedBooking] = useState(null);
   const [activeTab, setActiveTab] = useState("Overview");
-  const [backendStatus, setBackendStatus] = useState("checking");
 
-  useEffect(() => {
-    const storedUser = localStorage.getItem("user");
-    const currentUser = storedUser ? JSON.parse(storedUser) : null;
+  const [newCity, setNewCity] = useState({ name: "", stateName: "", image: "", knownFor: "" });
+  const [newAttraction, setNewAttraction] = useState({ citySlug: "", name: "", description: "", image: "", entry: "Free", duration: "" });
+  const [editingCitySlug, setEditingCitySlug] = useState(null);
+  const [editingAttractionKey, setEditingAttractionKey] = useState(null); // { citySlug, name }
+  const [citySearch, setCitySearch] = useState("");
+  const [attrSearch, setAttrSearch] = useState("");
 
-    if (!currentUser || currentUser.role?.toLowerCase() !== "admin") {
-      if (!currentUser || currentUser.role?.toLowerCase() !== "admin") {
-         navigate("/login");
-         return;
+  const handleAddCity = (e) => {
+    e.preventDefault();
+    if (!newCity.name || !newCity.stateName) return;
+
+    // generate slugs
+    const stateSlug = newCity.stateName.toLowerCase().replace(/\s+/g, '');
+    const citySlug = newCity.name.toLowerCase().replace(/\s+/g, '-');
+
+    const defaultImage = "https://images.unsplash.com/photo-1464822759023-fed622ff2c3b?auto=format&fit=crop&q=80&w=2070";
+    const cityData = {
+      ...newCity,
+      image: newCity.image || defaultImage,
+      slug: citySlug,
+      attractions: 0,
+      homestays: 0
+    };
+
+    const local = JSON.parse(localStorage.getItem("admin_cities") || "{}");
+
+    // If editing, remove the old version first
+    if (editingCitySlug) {
+      for (const state in local) {
+        local[state] = local[state].filter(c => c.slug !== editingCitySlug);
+        if (local[state].length === 0) delete local[state];
       }
     }
 
-    setUser(currentUser);
+    if (!local[stateSlug]) local[stateSlug] = [];
+    local[stateSlug].push(cityData);
+    localStorage.setItem("admin_cities", JSON.stringify(local));
 
-    let storedUsers = JSON.parse(localStorage.getItem("users")) || [];
-    if (storedUsers.length === 0) {
-        storedUsers = [
-           { id: 101, fullName: "Jayadeep", email: "devisrichowdaryk@gmail.com", role: "tourist", countryCode: "+91", phone: "1234567890" },
-           { id: 102, fullName: "Demo Guide", email: "guide@test.com", role: "guide", countryCode: "+91", phone: "9876543210", approvalStatus: "approved" },
-           { id: 103, fullName: "Demo Host", email: "host@test.com", role: "host", countryCode: "+91", phone: "9988776655", approvalStatus: "approved" },
-           { id: 104, fullName: "Admin Portal", email: "admin@test.com", role: "admin", countryCode: "+91", phone: "1122334455" }
-        ];
-        localStorage.setItem("users", JSON.stringify(storedUsers));
+    // Update availableCities
+    const available = JSON.parse(localStorage.getItem("availableCities") || "[]");
+    if (editingCitySlug) {
+      // Find old name to replace
+      // (simplification: just filter out anything with same slug-like name)
+      const filtered = available.filter(name => name.toLowerCase().replace(/\s+/g, '-') !== editingCitySlug);
+      if (!filtered.includes(newCity.name)) filtered.push(newCity.name);
+      localStorage.setItem("availableCities", JSON.stringify(filtered));
+    } else {
+      if (!available.includes(newCity.name)) {
+        available.push(newCity.name);
+        localStorage.setItem("availableCities", JSON.stringify(available));
+      }
     }
 
-    const storedBookings = JSON.parse(localStorage.getItem("savedPlans")) || [];
-    const customStays = JSON.parse(localStorage.getItem("customHomestays")) || [];
+    alert(editingCitySlug ? "City updated!" : `Success! ${newCity.name} added.`);
+    setEditingCitySlug(null);
+    setNewCity({ name: "", stateName: "", image: "", knownFor: "" });
+    window.location.reload();
+  };
+
+  const handleDeleteCity = (citySlug) => {
+    if (!window.confirm("Are you sure you want to delete this city and all its attractions?")) return;
     
-    setAllUsers(storedUsers);
-    setAllPlans(storedBookings);
-    setPropertyRequests(customStays);
-
-    // ✅ INIT CITIES
-    let storedCities = JSON.parse(localStorage.getItem("availableCities"));
-    if (!storedCities || storedCities.length === 0) {
-      storedCities = ["Hyderabad", "Warangal", "Mysore", "Chennai", "Madurai", "Jaipur", "Udaipur", "Mumbai", "Pune", "Delhi", "Bangalore", "Goa", "Kochi", "Munnar", "Kolkata", "Manali", "Shimla"];
-      localStorage.setItem("availableCities", JSON.stringify(storedCities));
+    // 1. Remove from admin_cities (if it's there)
+    const local = JSON.parse(localStorage.getItem("admin_cities") || "{}");
+    for (const state in local) {
+      const cityIndex = local[state].findIndex(c => c.slug === citySlug);
+      if (cityIndex > -1) {
+        local[state].splice(cityIndex, 1);
+        if (local[state].length === 0) delete local[state];
+        break;
+      }
     }
-    setAvailableCities(storedCities);
+    localStorage.setItem("admin_cities", JSON.stringify(local));
 
-    // ✅ INIT ATTRACTIONS
-    const storedAttractions = JSON.parse(localStorage.getItem("customAttractions")) || {};
-    setCustomAttractions(storedAttractions);
+    // 2. Add to blacklist (to hide hardcoded ones)
+    const blacklist = JSON.parse(localStorage.getItem("blacklisted_cities") || "[]");
+    if (!blacklist.includes(citySlug)) {
+      blacklist.push(citySlug);
+      localStorage.setItem("blacklisted_cities", JSON.stringify(blacklist));
+    }
 
-    // CHECK BACKEND HEALTH
-    fetch("/api/auth/send-otp?email=health-check", { credentials: "include" })
-      .then(() => setBackendStatus("online"))
-      .catch(() => setBackendStatus("offline"));
+    // 3. Remove attractions
+    const localAttractions = JSON.parse(localStorage.getItem("admin_attractions") || "{}");
+    delete localAttractions[citySlug];
+    localStorage.setItem("admin_attractions", JSON.stringify(localAttractions));
 
-    // FETCH FROM STS BACKEND
-    fetch("http://localhost:8080/api/users", { credentials: "include" })
-      .then(res => res.json())
-      .then(data => {
-         if(data && Array.isArray(data)) {
-            setAllUsers(prev => {
-                const merged = [...prev];
-                data.forEach(d => { if(!merged.find(p => p.email === d.email)) merged.push(d) });
-                return merged;
+    alert("City deleted!");
+    window.location.reload();
+  };
+
+  const handleDeleteAttraction = (citySlug, attrName) => {
+    if (!window.confirm(`Delete ${attrName}?`)) return;
+    
+    // 1. Remove from local storage if present
+    const local = JSON.parse(localStorage.getItem("admin_attractions") || "{}");
+    if (local[citySlug]) {
+      local[citySlug] = local[citySlug].filter(a => a.name !== attrName);
+      if (local[citySlug].length === 0) delete local[citySlug];
+      localStorage.setItem("admin_attractions", JSON.stringify(local));
+    }
+
+    // 2. Add to blacklist (for hardcoded ones)
+    const blacklist = JSON.parse(localStorage.getItem("blacklisted_attractions") || "[]");
+    const key = `${citySlug}|${attrName}`;
+    if (!blacklist.includes(key)) {
+      blacklist.push(key);
+      localStorage.setItem("blacklisted_attractions", JSON.stringify(blacklist));
+    }
+
+    alert("Attraction deleted!");
+    window.location.reload();
+  };
+
+  const handleAddAttraction = (e) => {
+    e.preventDefault();
+    if (!newAttraction.citySlug || !newAttraction.name) return;
+
+    const attractionData = {
+      name: newAttraction.name,
+      description: newAttraction.description,
+      image: newAttraction.image || "",
+      entry: newAttraction.entry,
+      duration: newAttraction.duration
+    };
+
+    const local = JSON.parse(localStorage.getItem("admin_attractions") || "{}");
+    
+    // If editing OR overwriting hardcoded, clear any blacklist for this specific key
+    const blacklist = JSON.parse(localStorage.getItem("blacklisted_attractions") || "[]");
+    const key = `${newAttraction.citySlug}|${newAttraction.name}`;
+    localStorage.setItem("blacklisted_attractions", JSON.stringify(blacklist.filter(k => k !== key)));
+
+    // If editing, remove old entry from local storage
+    if (editingAttractionKey) {
+      const { citySlug, name } = editingAttractionKey;
+      if (local[citySlug]) {
+        local[citySlug] = local[citySlug].filter(a => a.name !== name);
+      }
+    }
+
+    if (!local[newAttraction.citySlug]) local[newAttraction.citySlug] = [];
+    local[newAttraction.citySlug].push(attractionData);
+    localStorage.setItem("admin_attractions", JSON.stringify(local));
+
+    alert(editingAttractionKey ? "Attraction updated!" : "Attraction saved successfully!");
+    setEditingAttractionKey(null);
+    setNewAttraction({ citySlug: "", name: "", description: "", image: "", entry: "Free", duration: "" });
+    window.location.reload();
+  };
+
+  const fetchAdminData = async () => {
+    try {
+      const token = localStorage.getItem("token");
+
+      const storedUser = JSON.parse(localStorage.getItem("user"));
+      if (!storedUser || storedUser.role?.toLowerCase() !== "admin") {
+        alert("Access Denied: This dashboard is for admins only.");
+        navigate("/login");
+        return;
+      }
+
+      setUser(storedUser);
+
+      // ✅ Sync with Local Storage for offline/demo data
+      const pending = (JSON.parse(localStorage.getItem("pending_properties") || "[]")).map(p => ({...p, _sourceKey: "pending_properties"}));
+      const live = (JSON.parse(localStorage.getItem("homestays") || "[]")).map(p => ({...p, _sourceKey: "homestays"}));
+      
+      const allHostStays = [];
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        if (key && key.startsWith('host_stays_')) {
+          try {
+            const data = JSON.parse(localStorage.getItem(key));
+            if (Array.isArray(data)) {
+               data.forEach(item => {
+                  // If it's a homestay submission
+                  if (item.id && (item.name || item.title)) {
+                    allHostStays.push({...item, _sourceKey: key});
+                  }
+               });
+            }
+          } catch(e) { }
+        }
+      }
+      setPropertyRequests([...pending, ...live, ...allHostStays]);
+
+      const normalizeUser = (u) => {
+        const role = (u.role || "tourist").toLowerCase();
+        const email = (u.email || "").toLowerCase();
+
+        // Auto-approve Tourists, Admins, AND your default test accounts
+        const isDefaultAccount = email === "host@test.com" || email === "guide@test.com" || email === "admin@test.com";
+        const isApproved = u.approved === true || u.approvalStatus === "approved" ||
+          role === "tourist" || role === "admin" || isDefaultAccount;
+
+        return {
+          ...u,
+          name: u.name || u.fullName || "Unknown User",
+          role: role,
+          approved: isApproved,
+          approvalStatus: isApproved ? "approved" : (u.approvalStatus || "pending")
+        };
+      };
+
+      try {
+        const usersRes = await axios.get("http://localhost:8080/api/admin/users", {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        const usersData = usersRes.data?.data ?? usersRes.data;
+        const backendUsers = Array.isArray(usersData) ? usersData : [];
+        const localUsers = JSON.parse(localStorage.getItem("users")) || [];
+
+        const merged = backendUsers.map(normalizeUser);
+        localUsers.forEach(lu => {
+          if (!merged.find(u => u.email === lu.email)) {
+            merged.push(normalizeUser(lu));
+          }
+        });
+        setAllUsers(merged);
+      } catch {
+        const localUsers = JSON.parse(localStorage.getItem("users")) || [];
+        setAllUsers(localUsers.map(normalizeUser));
+      }
+
+      const computeOverallStatus = (b) => {
+        if (!b) return "pending";
+        const gStat = (b.guideStatus || "").toLowerCase().trim();
+        const hStat = (b.homestayStatus || "").toLowerCase().trim();
+        if (gStat === "rejected" || hStat === "rejected") return "rejected";
+        const hasG = b.guideName && b.guideName !== "N/A";
+        const hasH = b.homestayName && b.homestayName !== "N/A";
+        const gOk = !hasG || gStat === "confirmed";
+        const hOk = !hasH || hStat === "confirmed";
+        if (gOk && hOk) return "confirmed";
+        return "pending";
+      };
+
+      try {
+        const plansRes = await axios.get("http://localhost:8080/api/admin/bookings", {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        const plansData = plansRes.data?.data ?? plansRes.data;
+        const backendPlans = Array.isArray(plansData) ? plansData : [];
+        const localPlans = JSON.parse(localStorage.getItem("savedPlans")) || [];
+
+        const getUniqueKey = (item) => {
+          const sDate = item.startDate ? new Date(item.startDate).toISOString().split('T')[0] : "";
+          const eDate = item.endDate ? new Date(item.endDate).toISOString().split('T')[0] : "";
+          const city = (item.city || item.cities || "").toLowerCase().trim();
+          const email = (item.userEmail || "").toLowerCase().trim();
+          return `${city}-${sDate}-${eDate}-${email}`;
+        };
+
+        const mergedMap = new Map();
+        backendPlans.forEach(p => { mergedMap.set(getUniqueKey(p), { ...p }); });
+        localPlans.forEach(lp => {
+          const key = getUniqueKey(lp);
+          if (mergedMap.has(key)) {
+            const existing = mergedMap.get(key);
+            mergedMap.set(key, {
+              ...existing,
+              guideStatus: lp.guideStatus || existing.guideStatus,
+              homestayStatus: lp.homestayStatus || existing.homestayStatus,
+              touristName: lp.touristName || existing.touristName,
+              userEmail: lp.userEmail || existing.userEmail
             });
-         }
-      }).catch(err => console.error("Admin user sync failed:", err));
+          } else {
+            mergedMap.set(key, { ...lp });
+          }
+        });
 
-    fetch("http://localhost:8080/api/bookings", { credentials: "include" })
-      .then(res => res.json())
-      .then(data => {
-         if(data && Array.isArray(data)) {
-            setAllPlans(prev => {
-                const merged = [...prev];
-                data.forEach(d => { if(!merged.find(p => p.id === d.id)) merged.push(d) });
-                return merged;
-            });
-         }
-      }).catch(err => console.error("Admin bookings sync failed:", err));
+        const finalizedPlans = Array.from(mergedMap.values()).map(p => ({
+          ...p,
+          status: computeOverallStatus(p)
+        }));
+        setAllPlans(finalizedPlans);
+      } catch {
+        const localPlans = JSON.parse(localStorage.getItem("savedPlans")) || [];
+        setAllPlans(localPlans.map(lp => ({ ...lp, status: computeOverallStatus(lp) })));
+      }
 
-    fetch("http://localhost:8080/api/homestays", { credentials: "include" })
-      .then(res => res.json())
-      .then(data => {
-         if(data && Array.isArray(data)) {
-            setPropertyRequests(prev => {
-                const merged = [...prev];
-                data.forEach(d => { if(!merged.find(p => p.id === d.id)) merged.push(d) });
-                return merged;
-            });
-         }
-      }).catch(err => console.error("Admin property sync failed:", err));
+      try {
+        const propertyRes = await axios.get("http://localhost:8080/api/admin/properties", {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        const propData = propertyRes.data?.data ?? propertyRes.data;
+        const backendProps = Array.isArray(propData) ? propData : [];
+        
+        // 🔥 SYNC WITH OUR NEW STORAGE KEYS
+        const pendingProps = JSON.parse(localStorage.getItem("pending_properties") || "[]");
+        const liveProps = JSON.parse(localStorage.getItem("homestays") || "[]");
+        const localAll = [...pendingProps, ...liveProps];
 
-  }, [navigate]);
+        const mergedProps = [...backendProps];
+        localAll.forEach(lp => {
+          if (!mergedProps.find(p => p.id === lp.id)) {
+            mergedProps.push(lp);
+          }
+        });
+        setPropertyRequests(mergedProps);
+      } catch {
+        const pendingProps = JSON.parse(localStorage.getItem("pending_properties") || "[]");
+        const liveProps = JSON.parse(localStorage.getItem("homestays") || "[]");
+        setPropertyRequests([...pendingProps, ...liveProps]);
+      }
+
+    } catch (err) {
+      console.error("Admin data sync error:", err);
+      // Full fallback
+      const localUsers = JSON.parse(localStorage.getItem("users")) || [];
+      setAllUsers(localUsers.map(u => ({ ...u, name: u.name || u.fullName })));
+      
+      const localPlans = JSON.parse(localStorage.getItem("savedPlans")) || [];
+      setAllPlans(localPlans.map(lp => ({ ...lp, status: computeOverallStatus(lp) })));
+      
+      // ✅ DEEP SCAN: Find properties even from old/different keys
+      const allPending = [];
+      const allLive = JSON.parse(localStorage.getItem("homestays") || "[]");
+      
+      // Check the standard pending list
+      const standardPending = JSON.parse(localStorage.getItem("pending_properties") || "[]");
+      allPending.push(...standardPending);
+      
+      // Aggressive scan for host-specific lists (migration/repair)
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        if (key.startsWith("host_stays_") || key === "customHomestays") {
+          const list = JSON.parse(localStorage.getItem(key) || "[]");
+          list.forEach(p => {
+            if (p.approvalStatus === "pending" || p.status === "pending") {
+              if (!allPending.find(ap => ap.id === p.id)) allPending.push(p);
+            } else if (p.approvalStatus === "approved" || p.status === "approved") {
+              if (!allLive.find(al => al.id === p.id)) allLive.push(p);
+            }
+          });
+        }
+      }
+      
+      setPropertyRequests([...allPending, ...allLive]);
+    }
+  };
 
   useEffect(() => {
-     if(activeTab === "Property Requests" || activeTab === "Active Properties") {
-        const customStays = JSON.parse(localStorage.getItem("customHomestays")) || [];
-        setPropertyRequests(prev => {
-           const merged = [...prev];
-           customStays.forEach(c => {
-              const idx = merged.findIndex(m => m.id === c.id);
-              if(idx === -1) merged.push(c);
-              else merged[idx] = c;
-           });
-           return merged;
-        });
-     } else if (activeTab === "All Bookings") {
-        const storedBookings = JSON.parse(localStorage.getItem("savedPlans")) || [];
-        setAllPlans(prev => {
-           const merged = [...prev];
-           storedBookings.forEach(c => {
-              const idx = merged.findIndex(m => m.id === c.id);
-              if(idx === -1) merged.push(c);
-              else merged[idx] = c;
-           });
-           return merged;
-        });
-     }
-  }, [activeTab]);
+    fetchAdminData();
+    const handleSync = () => fetchAdminData();
+    window.addEventListener("storage", handleSync);
 
-  const handleUpdatePropertyStatus = (index, newStatus) => {
-    const customStays = JSON.parse(localStorage.getItem("customHomestays")) || [];
-    if (customStays[index]) {
-       customStays[index].approvalStatus = newStatus;
-       localStorage.setItem("customHomestays", JSON.stringify(customStays));
-       window.dispatchEvent(new Event("storage"));
-       setPropertyRequests(customStays);
-       
-       fetch(`http://localhost:8080/api/homestays/${customStays[index].id || index}/status`, {
-          method: "PUT",
-          credentials: "include",
-          headers: { "Content-Type": "application/json" },
-           body: JSON.stringify({ status: newStatus })
-       }).catch(err => console.error("Admin dashboard generic property save failure offline:", err));
+    return () => {
+      window.removeEventListener("storage", handleSync);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const handleUpdateUserStatus = async (id, status) => {
+    try {
+      const token = localStorage.getItem("token");
+      await axios.put(
+        `http://localhost:8080/api/admin/user/${id}`,
+        { status },
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      setAllUsers(prev => prev.map(u => u.id === id ? { ...u, approved: status === "approved", approvalStatus: status } : u));
+    } catch {
+      alert("Failed to update user");
     }
   };
 
-  const handleUpdateUserStatus = (email, newStatus) => {
-    if (!email) return;
-    const searchEmail = email.trim().toLowerCase();
-    const storedUsers = JSON.parse(localStorage.getItem("users")) || [];
-    
-    let found = false;
-    const updatedUsers = storedUsers.map(u => {
-       if (u.email && u.email.trim().toLowerCase() === searchEmail) {
-          found = true;
-          return { ...u, approvalStatus: newStatus };
-       }
-       return u;
-    });
+  const handleDeleteUser = async (id) => {
+    if (!window.confirm("Are you sure you want to delete this user?")) return;
+    try {
+      const token = localStorage.getItem("token");
+      await axios.delete(`http://localhost:8080/api/admin/user/${id}`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+    } catch { /* ignore backend error, still remove locally */ }
+    // remove from localStorage
+    const localUsers = JSON.parse(localStorage.getItem("users")) || [];
+    localStorage.setItem("users", JSON.stringify(localUsers.filter(u => String(u.id) !== String(id))));
+    setAllUsers(prev => prev.filter(u => String(u.id) !== String(id)));
+  };
 
-    if (found) {
-       localStorage.setItem("users", JSON.stringify(updatedUsers));
-       setAllUsers(updatedUsers);
-       window.dispatchEvent(new Event("storage"));
-       
-       const targetUser = updatedUsers.find(u => u.email.trim().toLowerCase() === searchEmail);
-       fetch(`http://localhost:8080/api/users/${targetUser.id || searchEmail}/status`, {
+  const handleDeleteAllTourists = async () => {
+    if (!window.confirm("Delete ALL tourist accounts from localStorage and database? This cannot be undone.")) return;
+    // 1. clean localStorage
+    const localUsers = JSON.parse(localStorage.getItem("users")) || [];
+    const kept = localUsers.filter(u => u.role?.toLowerCase() !== "tourist");
+    localStorage.setItem("users", JSON.stringify(kept));
+    // 2. call backend
+    try {
+      const token = localStorage.getItem("token");
+      await axios.delete("http://localhost:8080/api/admin/users/tourists", {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+    } catch { /* backend may be offline */ }
+    // 3. update state
+    setAllUsers(prev => prev.filter(u => u.role?.toLowerCase() !== "tourist"));
+    alert("All tourist accounts deleted.");
+  };
+
+  const handleUpdatePropertyStatusV2 = (id, newStatus) => {
+    if (!window.confirm(`Are you sure you want to ${newStatus} this property?`)) return;
+
+    const property = propertyRequests.find(p => String(p.id) === String(id));
+    if (!property) { alert("Property not found."); return; }
+
+    // Remove from pending_properties
+    const pendingList = JSON.parse(localStorage.getItem("pending_properties") || "[]");
+    localStorage.setItem("pending_properties", JSON.stringify(pendingList.filter(item => String(item.id) !== String(id))));
+
+    // Also remove from host_stays source if applicable
+    const sourceKey = property._sourceKey || "pending_properties";
+    if (sourceKey !== "pending_properties") {
+      const sourceList = JSON.parse(localStorage.getItem(sourceKey) || "[]");
+      localStorage.setItem(sourceKey, JSON.stringify(sourceList.filter(item => String(item.id) !== String(id))));
+    }
+
+    const approvedProp = {
+      ...property,
+      name: property.name || property.title,
+      title: property.name || property.title,
+      city: (property.citySlug || property.city || "").toLowerCase().trim(),
+      status: newStatus === "APPROVED" ? "approved" : "rejected",
+      approvalStatus: newStatus === "APPROVED" ? "approved" : "rejected",
+      isLive: newStatus === "APPROVED"
+    };
+
+    if (newStatus === "APPROVED") {
+      // Save to homestays (Live Managed Properties source)
+      const live = JSON.parse(localStorage.getItem("homestays") || "[]");
+      localStorage.setItem("homestays", JSON.stringify([...live.filter(i => String(i.id) !== String(id)), approvedProp]));
+
+      // Save to customHomestays (Homestay.jsx city listing source)
+      const custom = JSON.parse(localStorage.getItem("customHomestays") || "[]");
+      localStorage.setItem("customHomestays", JSON.stringify([...custom.filter(i => String(i.id) !== String(id)), approvedProp]));
+
+      // Update host tracking
+      if (property.hostId) {
+        const hostKey = `host_stays_${property.hostId}`;
+        const hostStays = JSON.parse(localStorage.getItem(hostKey) || "[]");
+        localStorage.setItem(hostKey, JSON.stringify(hostStays.map(s => String(s.id) === String(id) ? { ...s, status: "approved", approvalStatus: "approved" } : s)));
+      }
+
+      // Sync to backend DB
+      const isNumericId = !isNaN(Number(id));
+      if (isNumericId) {
+        // Already in DB, just update status
+        fetch(`http://localhost:8080/api/homestays/${id}/status`, {
           method: "PUT",
-          credentials: "include",
           headers: { "Content-Type": "application/json" },
-           body: JSON.stringify({ status: newStatus })
-       }).catch(err => console.error("Admin dashboard status sync failed:", err));
-       
-       alert(`User ${newStatus === 'approved' ? 'Accepted' : 'Rejected'} successfully!`);
+          body: JSON.stringify({ status: "APPROVED" })
+        }).catch(() => {});
+      } else {
+        // Not in DB yet, insert it
+        fetch("http://localhost:8080/api/homestays", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            title: approvedProp.name || approvedProp.title,
+            city: approvedProp.city,
+            price: Number(approvedProp.price) || 0,
+            description: approvedProp.description || "",
+            image: approvedProp.image || "",
+            hostId: approvedProp.hostId ? Number(approvedProp.hostId) : null,
+            hostName: approvedProp.hostName || "",
+            status: "APPROVED"
+          })
+        }).catch(() => {});
+      }
+
+      alert(`"${approvedProp.name}" approved and is now live in ${approvedProp.city}!`);
     } else {
-       setAllUsers(prev => prev.map(u => 
-          (u.email && u.email.trim().toLowerCase() === searchEmail) ? { ...u, approvalStatus: newStatus } : u
-       ));
-       alert(`Status updated in view for ${searchEmail}.`);
-    }
-  };
+      const rejected = JSON.parse(localStorage.getItem("rejected_properties") || "[]");
+      localStorage.setItem("rejected_properties", JSON.stringify([...rejected.filter(i => String(i.id) !== String(id)), approvedProp]));
 
-  const handleDeleteProperty = (index) => {
-    const customStays = JSON.parse(localStorage.getItem("customHomestays")) || [];
-    if (customStays[index]) {
-       customStays.splice(index, 1);
-       localStorage.setItem("customHomestays", JSON.stringify(customStays));
-       window.dispatchEvent(new Event("storage"));
-       setPropertyRequests(customStays);
+      fetch(`http://localhost:8080/api/homestays/${id}/status`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: "REJECTED" })
+      }).catch(() => {});
+
+      alert(`"${approvedProp.name}" has been rejected.`);
     }
+
+    // Update state immediately — no reload needed
+    const newLive = JSON.parse(localStorage.getItem("homestays") || "[]");
+    const newPending = JSON.parse(localStorage.getItem("pending_properties") || "[]");
+    setPropertyRequests([
+      ...newPending.map(p => ({ ...p, _sourceKey: "pending_properties" })),
+      ...newLive.map(p => ({ ...p, _sourceKey: "homestays" }))
+    ]);
+
+    window.dispatchEvent(new Event("storage"));
   };
 
   const handleLogout = () => {
     localStorage.removeItem("user");
+    localStorage.removeItem("token");
     navigate("/", { replace: true });
   };
 
-  const handleAddCity = () => {
-    if (!newCityName.trim()) return;
-    const updated = [...availableCities, newCityName.trim()];
-    const unique = [...new Set(updated)];
-    setAvailableCities(unique);
-    localStorage.setItem("availableCities", JSON.stringify(unique));
-    setNewCityName("");
-    alert("City added successfully!");
-  };
-
-  const handleDeleteCity = (cityToDelete) => {
-    const updated = availableCities.filter(c => c !== cityToDelete);
-    setAvailableCities(updated);
-    localStorage.setItem("availableCities", JSON.stringify(updated));
-  };
-
-  const handleAddAttraction = () => {
-    if (!attractionForm.city || !attractionForm.name) return;
-    const cityKey = attractionForm.city.toLowerCase().replace(/\s+/g, '-');
-    
-    // IMMUTABLE UPDATE
-    const cityList = customAttractions[cityKey] ? [...customAttractions[cityKey]] : [];
-    cityList.push({
-       name: attractionForm.name,
-       description: attractionForm.desc,
-       duration: attractionForm.duration,
-       entry: attractionForm.entry,
-       image: "https://images.unsplash.com/photo-1548013146-72479768bbaa?auto=format&fit=crop&q=80&w=2070" 
-    });
-
-    const updated = { ...customAttractions, [cityKey]: cityList };
-
-    setCustomAttractions(updated);
-    localStorage.setItem("customAttractions", JSON.stringify(updated));
-    setAttractionForm({ ...attractionForm, name: "", desc: "" });
-    alert("Attraction added!");
-  };
-
-  const handleDeleteAttraction = (cityKey, index) => {
-    const cityList = [...(customAttractions[cityKey] || [])];
-    cityList.splice(index, 1);
-    
-    const updated = { ...customAttractions, [cityKey]: cityList };
-    setCustomAttractions(updated);
-    localStorage.setItem("customAttractions", JSON.stringify(updated));
-  };
-
-  if (!user) return (
-    <div className="min-h-screen flex items-center justify-center bg-slate-900 text-white">
-      <div className="text-center">
-        <div className="w-16 h-16 border-4 border-yellow-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
-        <p className="text-xl font-semibold">Loading Dashboard...</p>
-      </div>
-    </div>
-  );
+  if (!user) return null;
 
   return (
     <div className="flex min-h-screen font-sans mt-16 text-gray-800 relative z-0">
       <div className="fixed inset-0 bg-slate-900 z-[-3]" />
-      <div 
+      <div
         className="fixed inset-0 z-[-2] pointer-events-none"
         style={{
-          backgroundImage: "url('https://images.unsplash.com/photo-1469854523086-cc02fe5d8800?q=80&w=2021&auto=format&fit=crop')", 
+          backgroundImage: "url('https://images.unsplash.com/photo-1469854523086-cc02fe5d8800?q=80&w=2021&auto=format&fit=crop')",
           backgroundSize: "cover",
           backgroundPosition: "center",
           backgroundRepeat: "no-repeat"
@@ -270,50 +540,44 @@ function AdminDashboard() {
       />
       <div className="fixed inset-0 bg-black/60 z-[-1] pointer-events-none" />
 
-      {/* 🔹 SIDEBAR */}
+      {/* SIDEBAR */}
       <aside className="w-64 bg-white/75 backdrop-blur-xl border-r border-gray-200/60 fixed h-full z-10 hidden md:flex flex-col">
-        <div 
-          onClick={() => navigate("/")} 
-          className="p-6 flex items-center gap-3 border-b border-gray-100/60 cursor-pointer hover:bg-white/40 transition-colors"
-        >
+        <div onClick={() => navigate("/")} className="p-6 flex items-center gap-3 border-b border-gray-100/60 cursor-pointer hover:bg-white/40 transition-colors">
           <MapPin fill="#eab308" className="text-white" size={24} />
-          <span className="text-xl font-bold tracking-tight text-gray-900">TourConnect</span>
+          <span className="text-xl font-bold tracking-tight text-gray-900">TourMate</span>
         </div>
-        
+
         <div className="flex-1 px-4 py-8 space-y-1">
           <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-4 px-3">Admin Panel</p>
-          <SidebarItem icon={<BarChart3 size={18}/>} label="Overview" active={activeTab === "Overview"} onClick={() => setActiveTab("Overview")} />
-          <SidebarItem icon={<Users size={18}/>} label="Manage Users" active={activeTab === "Manage Users"} onClick={() => setActiveTab("Manage Users")} />
-          <SidebarItem icon={<Globe size={18}/>} label="All Bookings" active={activeTab === "All Bookings"} onClick={() => setActiveTab("All Bookings")} />
-          <SidebarItem icon={<HomeIcon size={18}/>} label="Property Requests" active={activeTab === "Property Requests"} onClick={() => setActiveTab("Property Requests")} />
-          <SidebarItem icon={<CheckCircle size={18}/>} label="Active Properties" active={activeTab === "Active Properties"} onClick={() => setActiveTab("Active Properties")} />
-          <SidebarItem icon={<Settings size={18}/>} label="System Settings" active={activeTab === "Settings"} onClick={() => setActiveTab("Settings")} />
+          <SidebarItem icon={<BarChart3 size={18} />} label="Overview" active={activeTab === "Overview"} onClick={() => setActiveTab("Overview")} />
+          <SidebarItem icon={<Users size={18} />} label="Manage Users" active={activeTab === "Manage Users"} onClick={() => setActiveTab("Manage Users")} />
+          <SidebarItem icon={<Globe size={18} />} label="All Bookings" active={activeTab === "All Bookings"} onClick={() => setActiveTab("All Bookings")} />
+          <SidebarItem icon={<HomeIcon size={18} />} label="Property Requests" active={activeTab === "Property Requests"} onClick={() => setActiveTab("Property Requests")} />
+          <SidebarItem icon={<CheckCircle size={18} />} label="Active Properties" active={activeTab === "Active Properties"} onClick={() => setActiveTab("Active Properties")} />
+          <SidebarItem icon={<Map size={18} />} label="Destinations" active={activeTab === "Destinations"} onClick={() => setActiveTab("Destinations")} />
         </div>
 
         <div className="p-4 border-t border-gray-100/60 mb-16 flex flex-col gap-1">
-          <SidebarItem icon={<ArrowLeft size={18}/>} label="Back to Home" onClick={() => navigate("/")} />
-          <SidebarItem icon={<LogOut size={18}/>} label="Sign Out" onClick={handleLogout} isDanger />
+          <SidebarItem icon={<ArrowLeft size={18} />} label="Back to Home" onClick={() => navigate("/")} />
+          <SidebarItem icon={<LogOut size={18} />} label="Sign Out" onClick={handleLogout} isDanger />
         </div>
       </aside>
 
-      {/* 🔹 MAIN CONTENT */}
+      {/* MAIN CONTENT */}
       <main className="flex-1 md:ml-64 p-6 md:p-10 relative max-w-7xl mx-auto">
         <header className="mb-8 flex flex-col md:flex-row md:justify-between md:items-center gap-4">
           <div>
             <h1 className="text-3xl font-semibold text-white drop-shadow-sm flex items-center gap-3">
               <Shield className="text-yellow-400" size={28} />
-              TourConnect Administration
+              TourMate Administration <span className="text-[10px] bg-yellow-500 text-black px-2 py-0.5 rounded-full font-black uppercase tracking-widest">Ver 3.0</span>
             </h1>
-            <p className="text-gray-300 mt-1">Hello {user?.fullName?.split(" ")[0]}, monitor platform health.</p>
+            <p className="text-gray-300 mt-1">Hello {user?.fullName?.split(" ")[0]}, monitor platform health and usage.</p>
           </div>
-          <div 
-            onClick={() => setActiveTab("Settings")}
-            className="hidden md:flex items-center gap-3 cursor-pointer hover:bg-white/10 py-1.5 px-3 rounded-xl transition"
-          >
-             <span className="font-medium text-white drop-shadow-sm">{user?.fullName}</span>
-             <div className="w-10 h-10 rounded-full bg-slate-800 text-white border border-slate-600 flex items-center justify-center font-bold text-sm shadow-sm">
-               {user?.fullName?.charAt(0) || "A"}
-             </div>
+          <div onClick={() => setActiveTab("Settings")} className="hidden md:flex items-center gap-3 cursor-pointer hover:bg-white/10 py-1.5 px-3 rounded-xl transition">
+            <span className="font-medium text-white drop-shadow-sm">{user?.fullName}</span>
+            <div className="w-10 h-10 rounded-full bg-slate-800 text-white border border-slate-600 flex items-center justify-center font-bold text-sm shadow-sm">
+              {user?.fullName?.charAt(0) || "A"}
+            </div>
           </div>
         </header>
 
@@ -322,123 +586,164 @@ function AdminDashboard() {
           <div className="space-y-6">
             <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
               <StatCard title="Total Users" value={allUsers.length} onClick={() => setActiveTab("Manage Users")} />
-              <StatCard 
-                 title="Pending Approvals" 
-                 value={allUsers.filter(u => u.role !== 'tourist' && u.role !== 'admin' && u.approvalStatus === 'pending').length} 
-                 onClick={() => setActiveTab("Manage Users")}
-                 isHighlighted={allUsers.some(u => u.role !== 'tourist' && u.role !== 'admin' && u.approvalStatus === 'pending')}
-              />
-              <StatCard title="Live Guides" value={allUsers.filter(u => u.role === 'guide' && (u.approvalStatus === 'approved' || !u.approvalStatus)).length} onClick={() => setActiveTab("Manage Users")} />
-              <StatCard title="Total Revenue" value={`₹ ${(() => {
-                 let total = 0;
-                 allPlans.forEach(t => {
-                    const cityVal = t.city || "";
-                    const cityKey = cityVal.toLowerCase().trim();
-                    const hPrice = t.homestayPrice ? t.homestayPrice : (Number(localStorage.getItem(`homestayPrice_${cityKey}`)) || 0);
-                    const gPrice = t.guidePrice ? t.guidePrice : (Number(localStorage.getItem(`guidePrice_${cityKey}`)) || 0);
-                    const bPrice = t.baseTripCost || 0;
-                    total += (hPrice + gPrice + bPrice);
-                 });
-                 return total;
-              })()}`} onClick={() => setActiveTab("All Bookings")} />
+              <StatCard title="Active Plans" value={allPlans.length} onClick={() => setActiveTab("All Bookings")} />
+              <StatCard title="Live Guides" value={allUsers.filter(u => u.role === 'guide').length} onClick={() => setActiveTab("Manage Users")} />
+              <StatCard title="Properties" value={propertyRequests.length} onClick={() => setActiveTab("Property Requests")} />
             </div>
 
             <section className="bg-white/80 backdrop-blur-md p-6 rounded-xl border border-gray-200/60 shadow-sm">
-               <h3 className="text-lg font-semibold text-gray-900 mb-5">System Recent Activity</h3>
-               {allPlans.length === 0 ? (
-                 <p className="text-gray-500 py-4">No recent activity.</p>
-               ) : (
-                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                   {allPlans.slice(-4).map((t, idx) => (
-                       <div key={idx} className="p-4 border border-gray-100 rounded-lg bg-white/60 flex flex-col hover:border-blue-300 transition">
-                          <h4 className="font-semibold text-gray-900">New Booking: {t.city}</h4>
-                          <p className="text-xs text-gray-500 mt-1">Created At: {new Date(t.createdAt).toLocaleString()}</p>
-                          <p className="text-sm font-medium text-blue-600 mt-2">By: {t.userEmail}</p>
-                       </div>
-                   ))}
-                 </div>
-               )}
+              <h3 className="text-lg font-semibold text-gray-900 mb-5">Recent Bookings</h3>
+              {allPlans.length === 0 ? (
+                <p className="text-gray-500 py-4">No recent activity.</p>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {allPlans.slice(-4).map((t, idx) => (
+                    <div key={t.id || idx} className="p-4 border border-gray-100 rounded-lg bg-white/60 flex flex-col hover:border-blue-300 transition">
+                      <h4 className="font-semibold text-gray-900">{t.cities || t.city} Trip</h4>
+                      <p className="text-sm text-gray-500 mt-1">Tourist: {t.touristName || t.userEmail}</p>
+                      {t.homestayName && <p className="text-sm text-gray-500">🏡 {t.homestayName} (Status: {t.homestayStatus || "N/A"})</p>}
+                      {t.guideName && <p className="text-sm text-gray-500">👨‍🏫 {t.guideName} (Status: {t.guideStatus || "N/A"})</p>}
+                      <span className={`mt-2 self-start px-2 py-0.5 rounded text-xs font-bold uppercase ${t.status?.toLowerCase() === 'confirmed' ? 'bg-green-100 text-green-700' :
+                        t.status?.toLowerCase() === 'rejected' ? 'bg-red-100 text-red-700' :
+                          'bg-yellow-100 text-yellow-700'
+                        }`}>{t.status || 'pending'}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
             </section>
           </div>
         )}
 
         {/* MANAGE USERS TAB */}
-        {activeTab === "Manage Users" && (
-          <div className="bg-white/80 backdrop-blur-md p-8 rounded-xl border border-gray-200/60 shadow-sm min-h-[60vh]">
-            <h3 className="text-2xl font-semibold text-gray-900 mb-1">User Directory</h3>
-            <p className="text-gray-500 mb-8">View all registered users on the TourConnect platform.</p>
-            {allUsers.length === 0 ? (
-                 <p className="text-gray-500 py-4">No users found.</p>
-            ) : (
-                <div className="w-full overflow-x-auto">
-                   <table className="w-full text-left bg-white/60 rounded-lg overflow-hidden border border-gray-200">
-                      <thead className="bg-gray-100/80">
-                         <tr>
-                            <th className="p-4 font-semibold text-gray-700">Name</th>
-                            <th className="p-4 font-semibold text-gray-700">Email</th>
-                            <th className="p-4 font-semibold text-gray-700">Role & Status</th>
-                            <th className="p-4 font-semibold text-gray-700">City</th>
-                            <th className="p-4 font-semibold text-gray-700">Actions</th>
-                         </tr>
-                      </thead>
-                      <tbody>
-                         {(() => {
-                            const sortedUsers = [...allUsers].sort((a, b) => {
-                               if (a.approvalStatus === 'pending' && b.approvalStatus !== 'pending') return -1;
-                               if (a.approvalStatus !== 'pending' && b.approvalStatus === 'pending') return 1;
-                               return 0;
-                            });
+        {activeTab === "Manage Users" && (() => {
+          const filteredUsers = allUsers.filter(u => {
+            const matchesSearch = (u.name || "").toLowerCase().includes(searchQuery.toLowerCase()) || (u.email || "").toLowerCase().includes(searchQuery.toLowerCase());
+            const matchesRole = roleFilter === "all" || (u.role || "tourist").toLowerCase() === roleFilter;
+            return matchesSearch && matchesRole;
+          });
+          const totalPages = Math.ceil(filteredUsers.length / usersPerPage) || 1;
+          const paginatedUsers = filteredUsers.slice((currentPage - 1) * usersPerPage, currentPage * usersPerPage);
 
-                            return sortedUsers.map((u, idx) => (
-                             <tr key={idx} className={`border-t border-gray-200 ${u.approvalStatus === 'pending' ? 'bg-orange-50/30' : ''}`}>
-                                <td className="p-4 font-medium text-gray-900">
-                                   {u.fullName}
-                                   {u.approvalStatus === 'pending' && <span className="ml-2 text-[10px] bg-orange-100 text-orange-600 px-1.5 py-0.5 rounded font-bold uppercase">New</span>}
-                                </td>
-                                <td className="p-4 text-gray-600">{u.email}</td>
-                                <td className="p-4 text-gray-600">
-                                    <div className="flex flex-col gap-1 items-start">
-                                       <span className={`px-2 py-0.5 rounded text-[10px] font-bold tracking-widest uppercase ${
-                                           u.role === 'admin' ? 'bg-indigo-100 text-indigo-700' :
-                                           u.role === 'guide' ? 'bg-yellow-100 text-yellow-700' :
-                                           u.role === 'host' ? 'bg-green-100 text-green-700' :
-                                           'bg-slate-100 text-slate-700'
-                                       }`}>
-                                           {u.role ? u.role : 'TOURIST'}
-                                       </span>
-                                       {u.role !== 'tourist' && u.role !== 'admin' && (
-                                         <span className={`text-[10px] font-bold uppercase tracking-wider ${
-                                           u.approvalStatus === 'approved' ? 'text-green-600' :
-                                           u.approvalStatus === 'rejected' ? 'text-red-500' : 'text-orange-500'
-                                         }`}>
-                                            {u.approvalStatus || 'APPROVED'}
-                                         </span>
-                                       )}
-                                    </div>
-                                </td>
-                                <td className="p-4 text-gray-600 font-medium">{u.city || "N/A"}</td>
-                                <td className="p-4">
-                                   {u.role !== 'tourist' && u.role !== 'admin' && u.approvalStatus === 'pending' && (
-                                     <div className="flex gap-2">
-                                       <button onClick={() => handleUpdateUserStatus(u.email, 'approved')} className="px-3 py-1 bg-green-500 text-white text-xs font-bold rounded hover:bg-green-600 transition shadow-sm">Accept</button>
-                                       <button onClick={() => handleUpdateUserStatus(u.email, 'rejected')} className="px-3 py-1 bg-red-50 border border-red-200 text-red-600 text-xs font-bold rounded hover:bg-red-100 transition">Reject</button>
-                                     </div>
-                                   )}
-                                   {(u.approvalStatus === 'approved' || !u.approvalStatus) && (
-                                      <span className="text-xs text-green-600 font-medium flex items-center gap-1">
-                                         <CheckCircle size={14} /> Active
-                                      </span>
-                                   )}
-                                </td>
-                             </tr>
-                            ));
-                         })()}
+          return (
+            <div className="bg-white/80 backdrop-blur-md p-8 rounded-xl border border-gray-200/60 shadow-sm min-h-[60vh]">
+              <div className="flex flex-col md:flex-row md:items-center justify-between mb-8 gap-4">
+                <div>
+                  <h3 className="text-2xl font-semibold text-gray-900 mb-1">User Directory</h3>
+                  <p className="text-gray-500">View and manage the {allUsers.length} registered users on the TourMate platform.</p>
+                </div>
+                <div className="flex items-center gap-3 w-full md:w-auto flex-wrap">
+                  <button onClick={handleDeleteAllTourists} className="px-4 py-2 bg-red-600 text-white text-sm font-semibold rounded-lg hover:bg-red-700 transition whitespace-nowrap">Delete All Tourists</button>
+                  <div className="relative flex-1 md:w-64">
+                    <Search size={16} className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
+                    <input type="text" placeholder="Search users..." value={searchQuery} onChange={(e) => { setSearchQuery(e.target.value); setCurrentPage(1); }} className="w-full pl-9 pr-4 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-400 transition" />
+                  </div>
+                  <div className="relative">
+                    <Filter size={16} className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
+                    <select value={roleFilter} onChange={(e) => { setRoleFilter(e.target.value); setCurrentPage(1); }} className="pl-9 pr-8 py-2 border border-gray-200 rounded-lg text-sm appearance-none bg-white focus:outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-400 transition cursor-pointer">
+                      <option value="all">All Roles</option>
+                      <option value="tourist">Tourists</option>
+                      <option value="guide">Guides</option>
+                      <option value="host">Hosts</option>
+                    </select>
+                  </div>
+                </div>
+              </div>
+
+              {filteredUsers.length === 0 ? (
+                <div className="flex flex-col items-center justify-center p-12 bg-gray-50/50 rounded-xl border border-gray-100">
+                  <Users className="text-gray-300 mb-3" size={40} />
+                  <p className="text-gray-500 font-medium text-lg">No users match your filters.</p>
+                  <button onClick={() => { setSearchQuery(""); setRoleFilter("all"); }} className="mt-3 text-sm text-blue-600 font-medium hover:underline">Clear Filters</button>
+                </div>
+              ) : (
+                <div className="w-full flex flex-col">
+                  <div className="overflow-x-auto w-full">
+                    <table className="w-full text-left bg-white rounded-xl overflow-hidden shadow-sm border border-gray-100">
+                      <thead className="bg-gray-50/80 border-b border-gray-100">
+                        <tr>
+                          <th className="p-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">User</th>
+                          <th className="p-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Contact</th>
+                          <th className="p-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Role</th>
+                          <th className="p-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Status</th>
+                          <th className="p-4 text-xs font-semibold text-gray-500 uppercase tracking-wider text-right">Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-100">
+                        {paginatedUsers.map((u) => (
+                          <tr key={u.id} className="hover:bg-gray-50/50 transition-colors">
+                            <td className="p-4">
+                              <div className="flex items-center gap-3">
+                                <div className="w-10 h-10 rounded-full bg-slate-800 text-white flex items-center justify-center font-bold shadow-sm">
+                                  {u.name ? u.name.charAt(0).toUpperCase() : "U"}
+                                </div>
+                                <span className="font-semibold text-gray-900 truncate max-w-[150px]">{u.name}</span>
+                              </div>
+                            </td>
+                            <td className="p-4 text-sm text-gray-600 font-medium truncate max-w-[200px]">{u.email}</td>
+                            <td className="p-4">
+                              <span className={`px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wide ${u.role === 'admin' ? 'bg-indigo-100 text-indigo-700' :
+                                u.role === 'guide' ? 'bg-amber-100 text-amber-700' :
+                                  u.role === 'host' ? 'bg-emerald-100 text-emerald-700' :
+                                    'bg-slate-100 text-slate-700'
+                                }`}>
+                                {u.role || 'tourist'}
+                              </span>
+                            </td>
+                            <td className="p-4">
+                              <div className="flex items-center gap-1.5">
+                                <div className={`w-2 h-2 rounded-full ${u.approved ? 'bg-emerald-500' : 'bg-amber-500'}`}></div>
+                                <span className={`text-xs font-bold uppercase tracking-wide ${u.approved ? 'text-emerald-700' : 'text-amber-600'}`}>
+                                  {u.approved ? 'Approved' : 'Pending'}
+                                </span>
+                              </div>
+                            </td>
+                            <td className="p-4 text-right">
+                              {u.role !== 'admin' && (
+                                <div className="flex gap-2 justify-end">
+                                  {!u.approved ? (
+                                    <button onClick={() => handleUpdateUserStatus(u.id, 'approved')} className="px-3 py-1.5 bg-emerald-500 text-white text-xs font-semibold rounded-lg hover:bg-emerald-600 transition shadow-sm">Approve</button>
+                                  ) : (
+                                    <button onClick={() => handleUpdateUserStatus(u.id, 'rejected')} className="px-3 py-1.5 bg-amber-50 text-amber-600 border border-amber-200 text-xs font-semibold rounded-lg hover:bg-amber-100 transition shadow-sm">Revoke</button>
+                                  )}
+                                  <button onClick={() => handleDeleteUser(u.id)} className="px-3 py-1.5 bg-red-50 text-red-600 border border-red-200 text-xs font-semibold rounded-lg hover:bg-red-100 transition shadow-sm">Remove</button>
+                                </div>
+                              )}
+                            </td>
+                          </tr>
+                        ))}
                       </tbody>
-                   </table>
-                 </div>
-            )}
-          </div>
-        )}
+                    </table>
+                  </div>
+
+                  {/* Pagination Controls */}
+                  <div className="mt-6 flex items-center justify-between">
+                    <p className="text-sm text-gray-500">
+                      Showing <span className="font-medium text-gray-900">{(currentPage - 1) * usersPerPage + 1}</span> to <span className="font-medium text-gray-900">{Math.min(currentPage * usersPerPage, filteredUsers.length)}</span> of <span className="font-medium text-gray-900">{filteredUsers.length}</span> users
+                    </p>
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+                        disabled={currentPage === 1}
+                        className="p-1.5 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition"
+                      >
+                        <ChevronLeft size={18} />
+                      </button>
+                      <span className="text-sm font-medium text-gray-700 px-2">Page {currentPage} of {totalPages}</span>
+                      <button
+                        onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+                        disabled={currentPage === totalPages}
+                        className="p-1.5 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition"
+                      >
+                        <ChevronRight size={18} />
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          );
+        })()}
 
         {/* ALL BOOKINGS TAB */}
         {activeTab === "All Bookings" && (
@@ -446,109 +751,102 @@ function AdminDashboard() {
             <h3 className="text-2xl font-semibold text-gray-900 mb-1">Global Bookings</h3>
             <p className="text-gray-500 mb-8">All active trip plans logged in the system.</p>
             {allPlans.length === 0 ? (
-                 <p className="text-gray-500 py-4">No plans have been created.</p>
+              <p className="text-gray-500 py-4">No plans have been created.</p>
             ) : (
-                <div className="grid grid-cols-1 gap-4">
-                   {allPlans.map((t, idx) => (
-                     <div key={idx} className="p-5 border border-gray-200 rounded-xl bg-white/60 flex justify-between items-center">
-                        <div>
-                            <h4 className="font-semibold text-gray-900 text-lg">{t.city} Trip</h4>
-                            <p className="text-sm text-gray-500 mt-1">Status: {t.status} | User: {t.userEmail}</p>
-                            <p className="text-sm text-slate-500 mt-1">Dates: {t.startDate} - {t.endDate}</p>
-                        </div>
-                        <button onClick={() => setSelectedBooking(t)} className="px-4 py-2 bg-slate-900 text-white text-sm rounded-lg hover:bg-slate-800 transition">View Details</button>
-                     </div>
-                   ))}
-                 </div>
-            )}
-            
-            {/* BOOKING DETAILS MODAL */}
-            {selectedBooking && (() => {
-               const cityVal = selectedBooking.city || "";
-               const cityKey = cityVal.toLowerCase().trim();
-               const hPrice = selectedBooking.homestayPrice ? selectedBooking.homestayPrice : (Number(localStorage.getItem(`homestayPrice_${cityKey}`)) || 0);
-               const gPrice = selectedBooking.guidePrice ? selectedBooking.guidePrice : (Number(localStorage.getItem(`guidePrice_${cityKey}`)) || 0);
-               const bPrice = selectedBooking.baseTripCost || 0;
-               const hName = selectedBooking.homestayName && selectedBooking.homestayName !== "N/A" ? selectedBooking.homestayName : (localStorage.getItem(`homestayName_${cityKey}`) || "N/A");
-               const gName = selectedBooking.guideName && selectedBooking.guideName !== "N/A" ? selectedBooking.guideName : (localStorage.getItem(`guideName_${cityKey}`) || "N/A");
-               const totalGross = hPrice + gPrice + bPrice;
-
-               return (
-               <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4 block mt-10 text-gray-800">
-                 <div className="bg-white rounded-xl w-full max-w-lg shadow-2xl p-6 mt-16 max-h-[85vh] overflow-y-auto">
-                    <h3 className="text-2xl font-bold text-gray-900 border-b border-gray-100 pb-4 mb-4 text-gray-800">Trip Gross Breakdown</h3>
-                    <div className="space-y-4">
-                       <div>
-                         <p className="text-xs text-gray-500 uppercase tracking-widest font-bold">Booking User</p>
-                         <p className="text-lg text-blue-700 font-semibold">{selectedBooking.userEmail}</p>
-                       </div>
-                       <div className="grid grid-cols-1 gap-4 bg-blue-50/50 p-4 rounded-xl border border-blue-100 mb-2">
-                          <div className="flex justify-between items-center whitespace-nowrap">
-                            <p className="text-xs text-blue-800 uppercase tracking-widest font-bold mb-1">Base Itinerary Attractions Cost</p>
-                            <p className="text-sm text-blue-900 font-bold mt-1">₹{bPrice}</p>
-                          </div>
-                          {bPrice === 0 && <p className="text-xs text-slate-500 italic">Pre-architecture legacy data</p>}
-                       </div>
-                       <div className="grid grid-cols-2 gap-4 bg-gray-50 p-4 rounded-xl border border-gray-100">
-                          <div>
-                            <p className="text-xs text-gray-500 uppercase tracking-widest font-bold mb-1">Homestay Asset</p>
-                            <p className="text-sm font-semibold text-gray-800">{hName}</p>
-                            <p className="text-xs text-green-700 font-bold mt-1">₹{hPrice}</p>
-                          </div>
-                          <div>
-                            <p className="text-xs text-gray-500 uppercase tracking-widest font-bold mb-1">Guide Assigned</p>
-                            <p className="text-sm font-semibold text-gray-800">{gName}</p>
-                            <p className="text-xs text-green-700 font-bold mt-1">₹{gPrice}</p>
-                          </div>
-                       </div>
-                       <div className="mt-4 flex justify-between items-center bg-green-50 px-4 py-3 rounded-lg border border-green-200">
-                          <span className="font-bold text-green-900 uppercase tracking-widest text-sm">Total Trip Revenue</span>
-                          <span className="text-2xl font-bold text-green-700">₹{totalGross}</span>
-                       </div>
+              <div className="grid grid-cols-1 gap-4">
+                {allPlans.map((t, idx) => (
+                  <div key={idx} className="p-5 border border-gray-200 rounded-xl bg-white/60 flex justify-between items-center">
+                    <div>
+                      <h4 className="font-semibold text-gray-900 text-lg">{t.cities} Trip</h4>
+                      <p className="text-sm text-gray-500 mt-1">Tourist: {t.touristName}</p>
+                      <p className="text-sm text-slate-500 mt-1">Dates: {t.startDate} → {t.endDate}</p>
+                      {t.homestayName && <p className="text-sm text-gray-500">🏡 Homestay: {t.homestayName}</p>}
+                      {t.guideName && <p className="text-sm text-gray-500">👨🏫 Guide: {t.guideName}</p>}
+                      <span className={`mt-2 inline-block px-2.5 py-0.5 rounded text-xs font-bold uppercase ${t.status === 'confirmed' ? 'bg-green-100 text-green-700' :
+                        t.status === 'rejected' ? 'bg-red-100 text-red-700' :
+                          'bg-yellow-100 text-yellow-700'
+                        }`}>{t.status}</span>
                     </div>
-                    <button onClick={() => setSelectedBooking(null)} className="w-full mt-6 py-2.5 bg-gray-900 text-white rounded-lg hover:bg-black font-semibold transition">Close Breakdown</button>
-                 </div>
-               </div>
-               )
-            })()}
+                    <button onClick={() => setSelectedBooking(t)} className="px-4 py-2 bg-slate-900 text-white text-sm rounded-lg hover:bg-slate-800 transition">View Details</button>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* BOOKING DETAILS MODAL */}
+            {selectedBooking && (
+              <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+                <div className="bg-white rounded-xl w-full max-w-lg shadow-2xl p-6 mt-16 max-h-[85vh] overflow-y-auto">
+                  <h3 className="text-2xl font-bold text-gray-900 border-b border-gray-100 pb-4 mb-4">Booking Details</h3>
+                  <div className="space-y-4">
+                    <div>
+                      <p className="text-xs text-gray-500 uppercase tracking-widest font-bold">Booking User</p>
+                      <p className="text-lg text-blue-700 font-semibold">{selectedBooking.touristName}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-gray-500 uppercase tracking-widest font-bold">Tourist Name</p>
+                      <p className="text-base text-gray-800">{selectedBooking.touristName}</p>
+                    </div>
+                    <div className="grid grid-cols-2 gap-4 bg-gray-50 p-4 rounded-xl border border-gray-100">
+                      <div>
+                        <p className="text-xs text-gray-500 uppercase tracking-widest font-bold mb-1">Homestay</p>
+                        <p className="text-sm font-semibold text-gray-800">{selectedBooking.homestayName || "N/A"}</p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-gray-500 uppercase tracking-widest font-bold mb-1">Guide</p>
+                        <p className="text-sm font-semibold text-gray-800">{selectedBooking.guideName || "N/A"}</p>
+                      </div>
+                    </div>
+                    <div className="flex justify-between items-center bg-green-50 px-4 py-3 rounded-lg border border-green-200">
+                      <span className="font-bold text-green-900 uppercase tracking-widest text-sm">Status</span>
+                      <span className="text-lg font-bold text-green-700">{selectedBooking.status}</span>
+                    </div>
+                  </div>
+                  <button onClick={() => setSelectedBooking(null)} className="w-full mt-6 py-2.5 bg-gray-900 text-white rounded-lg hover:bg-black font-semibold transition">Close</button>
+                </div>
+              </div>
+            )}
           </div>
         )}
 
         {/* PROPERTY REQUESTS TAB */}
         {activeTab === "Property Requests" && (() => {
-          const pendingRequests = propertyRequests.map((p, idx) => ({ ...p, originalIndex: idx })).filter(p => p && p.approvalStatus === "pending");
+          const pendingRequests = propertyRequests.filter(p => {
+             const s = (p.status || p.approvalStatus || "pending").toLowerCase();
+             return s === "pending";
+          });
           return (
             <div className="bg-white/80 backdrop-blur-md p-8 rounded-xl border border-gray-200/60 shadow-sm min-h-[60vh]">
               <h3 className="text-2xl font-semibold text-gray-900 mb-1">Host Property Submissions</h3>
-              <p className="text-gray-500 mb-8">Review and moderate user-submitted homestays before they go live on the platform.</p>
+              <p className="text-gray-500 mb-8">Review and moderate user-submitted homestays before they go live.</p>
               {pendingRequests.length === 0 ? (
-                  <div className="flex flex-col items-center justify-center p-10 bg-gray-50/50 rounded-xl border border-gray-100">
-                      <HomeIcon className="text-gray-300 mb-3" size={40} />
-                      <p className="text-gray-500 font-medium text-lg">No pending property requests.</p>
-                  </div>
+                <div className="flex flex-col items-center justify-center p-10 bg-gray-50/50 rounded-xl border border-gray-100">
+                  <HomeIcon className="text-gray-300 mb-3" size={40} />
+                  <p className="text-gray-500 font-medium text-lg">No pending property requests.</p>
+                </div>
               ) : (
-                  <div className="grid grid-cols-1 gap-5">
-                    {pendingRequests.map((p) => (
-                      <div key={p.originalIndex} className="p-6 border border-gray-200 rounded-xl bg-white flex flex-col md:flex-row justify-between items-start md:items-center gap-4 shadow-sm hover:shadow-md transition">
-                          <div className="flex-1">
-                              <div className="flex items-center gap-3 mb-2">
-                                  <h4 className="font-bold text-gray-900 text-xl">{p.name}</h4>
-                                  <span className="bg-yellow-100 text-yellow-800 text-xs font-semibold px-2.5 py-0.5 rounded border border-yellow-200 uppercase tracking-widest">Pending Review</span>
-                              </div>
-                              <p className="text-sm font-medium text-blue-600 mb-2 capitalize">{p.city} Area</p>
-                              <p className="text-sm text-gray-600 mb-3">{p.description}</p>
-                              <div className="flex items-center gap-4 text-sm font-semibold">
-                                  <span className="text-green-700 bg-green-50 px-2 py-1 rounded">Listed Price: ₹{p.price} / night</span>
-                                  <span className="text-yellow-600">Initial Rating: ⭐ {p.rating}</span>
-                              </div>
-                          </div>
-                          <div className="flex gap-3 md:flex-col lg:flex-row min-w-[220px]">
-                              <button onClick={() => handleUpdatePropertyStatus(p.originalIndex, 'approved')} className="flex-1 px-4 py-2.5 bg-green-600 text-white text-sm font-medium rounded-lg hover:bg-green-700 transition">Approve Listing</button>
-                              <button onClick={() => handleUpdatePropertyStatus(p.originalIndex, 'rejected')} className="flex-1 px-4 py-2.5 bg-red-50 text-red-700 border border-red-200 text-sm font-medium rounded-lg hover:bg-red-100 transition">Reject Listing</button>
-                          </div>
+                <div className="grid grid-cols-1 gap-5">
+                  {pendingRequests.map((p, idx) => (
+                    <div key={p.id} className="p-4 border border-gray-200 rounded-xl bg-white flex flex-col md:flex-row items-center gap-6 shadow-sm">
+                      <div className="flex-1">
+                        <div className="flex items-center gap-3 mb-1">
+                          <h4 className="font-bold text-gray-900 text-xl">{p.name || p.title}</h4>
+                          <span className="bg-yellow-100 text-yellow-800 text-[10px] font-bold px-2 py-0.5 rounded border border-yellow-200 uppercase">Pending Review</span>
+                        </div>
+                        <p className="text-sm font-semibold text-blue-600 mb-1">City: {p.city}</p>
+                        <p className="text-xs text-gray-500 mb-2 line-clamp-2">{p.description}</p>
+                        <div className="flex items-center gap-4 text-xs font-medium text-gray-400">
+                          <span>Host: {p.hostName}</span>
+                          <span>Price: ₹{p.price}</span>
+                        </div>
                       </div>
-                    ))}
-                  </div>
+                      <div className="flex gap-2 w-full md:w-auto">
+                        <button onClick={() => handleUpdatePropertyStatusV2(p.id, 'APPROVED')} className="flex-1 px-4 py-2 bg-green-600 text-white text-sm font-semibold rounded-lg hover:bg-green-700 transition">Approve</button>
+                        <button onClick={() => handleUpdatePropertyStatusV2(p.id, 'REJECTED')} className="flex-1 px-4 py-2 bg-red-50 text-red-700 border border-red-200 text-sm font-semibold rounded-lg hover:bg-red-100 transition">Reject</button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
               )}
             </div>
           );
@@ -556,179 +854,341 @@ function AdminDashboard() {
 
         {/* ACTIVE PROPERTIES TAB */}
         {activeTab === "Active Properties" && (() => {
-          const liveProperties = propertyRequests.map((p, idx) => ({ ...p, originalIndex: idx })).filter(p => p && p.approvalStatus === "approved");
+          const liveProperties = propertyRequests.filter(p => {
+             const s = (p.status || p.approvalStatus || "").toLowerCase();
+             return s === "approved";
+          });
           return (
             <div className="bg-white/80 backdrop-blur-md p-8 rounded-xl border border-gray-200/60 shadow-sm min-h-[60vh]">
               <h3 className="text-2xl font-semibold text-gray-900 mb-1">Live Managed Properties</h3>
-              <p className="text-gray-500 mb-8">View and terminate active custom homestays.</p>
+              <p className="text-gray-500 mb-8">View active approved homestays on the platform.</p>
               {liveProperties.length === 0 ? (
-                  <div className="flex flex-col items-center justify-center p-10 bg-gray-50/50 rounded-xl border border-gray-100">
-                      <CheckCircle className="text-gray-300 mb-3" size={40} />
-                      <p className="text-gray-500 font-medium text-lg">No active custom listings.</p>
-                  </div>
+                <div className="flex flex-col items-center justify-center p-10 bg-gray-50/50 rounded-xl border border-gray-100">
+                  <CheckCircle className="text-gray-300 mb-3" size={40} />
+                  <p className="text-gray-500 font-medium text-lg">No active custom listings.</p>
+                </div>
               ) : (
-                  <div className="grid grid-cols-1 gap-5">
-                    {liveProperties.map((p) => (
-                      <div key={p.originalIndex} className="p-6 border border-gray-200 rounded-xl bg-white flex flex-col md:flex-row justify-between items-start md:items-center gap-4 shadow-sm hover:shadow-md transition">
-                          <div className="flex-1">
-                              <div className="flex items-center gap-3 mb-2">
-                                  <h4 className="font-bold text-gray-900 text-xl">{p.name}</h4>
-                                  <span className="bg-green-100 text-green-800 text-xs font-bold px-2.5 py-0.5 rounded border border-green-200 uppercase tracking-widest">Public & Live</span>
-                              </div>
-                              <p className="text-sm font-medium text-blue-600 mb-2 capitalize">{p.city} Area | Host: {p.hostEmail}</p>
-                              <p className="text-sm text-gray-600 mb-3">{p.description}</p>
-                          </div>
-                          <div className="flex min-w-[150px]">
-                              <button onClick={() => handleDeleteProperty(p.originalIndex)} className="flex-1 px-4 py-2.5 bg-red-600 text-white text-sm font-medium rounded-lg hover:bg-red-700 transition shadow-sm">Terminate Listing</button>
-                          </div>
+                <div className="grid grid-cols-1 gap-5">
+                  {liveProperties.map((p) => (
+                    <div key={p.id} className="p-4 border border-gray-200 rounded-xl bg-white flex flex-col md:flex-row items-center gap-6 shadow-sm">
+                      <div className="flex-1">
+                        <h4 className="font-bold text-gray-900 text-lg">{p.name || p.title}</h4>
+                        <p className="text-sm text-blue-600">{p.city}</p>
+                        <p className="text-xs text-gray-400 mt-1">Host: {p.hostName}</p>
                       </div>
-                    ))}
-                  </div>
+                      <button onClick={() => {
+                        const all = JSON.parse(localStorage.getItem("homestays") || "[]");
+                        const filtered = all.filter(item => item.id !== p.id);
+                        localStorage.setItem("homestays", JSON.stringify(filtered));
+                        window.location.reload();
+                      }} className="px-4 py-2 bg-red-50 text-red-600 border border-red-200 text-xs font-bold rounded-lg hover:bg-red-100 transition">Remove Listing</button>
+                    </div>
+                  ))}
+                </div>
               )}
             </div>
           );
         })()}
 
-        {/* SETTINGS TAB */}
-        {activeTab === "Settings" && (
+        {/* DESTINATIONS TAB */}
+        {activeTab === "Destinations" && (
           <div className="bg-white/80 backdrop-blur-md p-8 rounded-xl border border-gray-200/60 shadow-sm min-h-[60vh]">
-            <div className="flex justify-between items-center mb-8">
-               <div>
-                  <h3 className="text-2xl font-semibold text-gray-900 mb-1">System Configuration</h3>
-                  <p className="text-gray-500">Manage platform-wide metadata and supported locations.</p>
-               </div>
-               <Settings className="text-gray-400" size={32} />
+            <h3 className="text-2xl font-semibold text-gray-900 mb-1">Manage Destinations</h3>
+            <p className="text-gray-500 mb-8">Add new cities and local attractions to expand the platform footprint.</p>
+
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+              <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
+                <h4 className="text-lg font-bold text-gray-800 mb-4 flex items-center gap-2">
+                  <MapPin size={20} className="text-blue-500" />
+                  {editingCitySlug ? "Update City" : "Add New City"}
+                </h4>
+                <form onSubmit={handleAddCity} className="space-y-4">
+                  <div>
+                    <label className="text-sm font-semibold text-gray-600">City Name</label>
+                    <input type="text" className="w-full mt-1 p-2 border border-gray-200 rounded-lg" required value={newCity.name} onChange={e => setNewCity({ ...newCity, name: e.target.value })} placeholder="e.g. Surat" />
+                  </div>
+                  <div>
+                    <label className="text-sm font-semibold text-gray-600">State Name</label>
+                    <input type="text" className="w-full mt-1 p-2 border border-gray-200 rounded-lg" required value={newCity.stateName} onChange={e => setNewCity({ ...newCity, stateName: e.target.value })} placeholder="e.g. Gujarat" />
+                  </div>
+                  <div>
+                    <label className="text-sm font-semibold text-gray-600">Image URL</label>
+                    <input type="url" className="w-full mt-1 p-2 border border-gray-200 rounded-lg" value={newCity.image} onChange={e => setNewCity({ ...newCity, image: e.target.value })} placeholder="https://..." />
+                  </div>
+                  <div>
+                    <label className="text-sm font-semibold text-gray-600">Known For</label>
+                    <input type="text" className="w-full mt-1 p-2 border border-gray-200 rounded-lg" value={newCity.knownFor} onChange={e => setNewCity({ ...newCity, knownFor: e.target.value })} placeholder="e.g. Diamond City" />
+                  </div>
+                  <div className="flex gap-2">
+                    <button type="submit" className="flex-grow py-2 bg-blue-600 text-white rounded-lg font-semibold hover:bg-blue-700 transition flex items-center justify-center gap-2">
+                      <Plus size={18} /> {editingCitySlug ? "Update City" : "Save City"}
+                    </button>
+                    {editingCitySlug && (
+                      <button
+                        type="button"
+                        onClick={() => { setEditingCitySlug(null); setNewCity({ name: "", stateName: "", image: "", knownFor: "" }); }}
+                        className="px-4 py-2 bg-gray-100 text-gray-600 rounded-lg font-semibold hover:bg-gray-200 transition"
+                      >
+                        Cancel
+                      </button>
+                    )}
+                  </div>
+                </form>
+              </div>
+
+              <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
+                <h4 className="text-lg font-bold text-gray-800 mb-4 flex items-center gap-2">
+                  <Map size={20} className="text-emerald-500" />
+                  {editingAttractionKey ? "Update Attraction" : "Add New Attraction"}
+                </h4>
+                <form onSubmit={handleAddAttraction} className="space-y-4">
+                  <div>
+                    <label className="text-sm font-semibold text-gray-600">Select City</label>
+                    <select className="w-full mt-1 p-2 border border-gray-200 rounded-lg" required value={newAttraction.citySlug} onChange={e => setNewAttraction({ ...newAttraction, citySlug: e.target.value })}>
+                      <option value="">-- Choose a city --</option>
+                      {(() => {
+                        const hardcoded = Object.values(citiesByState).flat();
+                        const localAdmin = JSON.parse(localStorage.getItem("admin_cities") || "{}");
+                        const localList = Object.values(localAdmin).flat();
+                        const allCities = [...hardcoded, ...localList.filter(lc => !hardcoded.find(h => h.slug === lc.slug))];
+                        return allCities.map(city => (
+                          <option key={city.slug} value={city.slug}>{city.name} ({city.stateName})</option>
+                        ));
+                      })()}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="text-sm font-semibold text-gray-600">Attraction Name</label>
+                    <input type="text" className="w-full mt-1 p-2 border border-gray-200 rounded-lg" required value={newAttraction.name} onChange={e => setNewAttraction({ ...newAttraction, name: e.target.value })} placeholder="e.g. Dumas Beach" />
+                  </div>
+                  <div>
+                    <label className="text-sm font-semibold text-gray-600">Description</label>
+                    <input type="text" className="w-full mt-1 p-2 border border-gray-200 rounded-lg" required value={newAttraction.description} onChange={e => setNewAttraction({ ...newAttraction, description: e.target.value })} placeholder="Short description..." />
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="text-sm font-semibold text-gray-600">Entry</label>
+                      <select className="w-full mt-1 p-2 border border-gray-200 rounded-lg" value={newAttraction.entry} onChange={e => setNewAttraction({ ...newAttraction, entry: e.target.value })}>
+                        <option value="Free">Free</option>
+                        <option value="Paid">Paid</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="text-sm font-semibold text-gray-600">Duration</label>
+                      <input type="text" className="w-full mt-1 p-2 border border-gray-200 rounded-lg" value={newAttraction.duration} onChange={e => setNewAttraction({ ...newAttraction, duration: e.target.value })} placeholder="e.g. 1-2 hrs" />
+                    </div>
+                  </div>
+                  <div>
+                    <label className="text-sm font-semibold text-gray-600">Image URL (Optional)</label>
+                    <input type="url" className="w-full mt-1 p-2 border border-gray-200 rounded-lg" value={newAttraction.image} onChange={e => setNewAttraction({ ...newAttraction, image: e.target.value })} placeholder="https://..." />
+                  </div>
+                  <div className="flex gap-2">
+                    <button type="submit" className="flex-grow py-2 bg-emerald-600 text-white rounded-lg font-semibold hover:bg-emerald-700 transition flex items-center justify-center gap-2">
+                      <Plus size={18} /> {editingAttractionKey ? "Update Attraction" : "Save Attraction"}
+                    </button>
+                    {editingAttractionKey && (
+                      <button
+                        type="button"
+                        onClick={() => { setEditingAttractionKey(null); setNewAttraction({ citySlug: "", name: "", description: "", image: "", entry: "Free", duration: "" }); }}
+                        className="px-4 py-2 bg-gray-100 text-gray-600 rounded-lg font-semibold hover:bg-gray-200 transition"
+                      >
+                        Cancel
+                      </button>
+                    )}
+                  </div>
+                </form>
+              </div>
             </div>
 
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-10">
-               {/* CITY MANAGEMENT SECTION */}
-               <section>
-                  <h4 className="text-lg font-bold text-gray-800 mb-4 border-b pb-2 flex items-center gap-2">
-                     <Globe size={20} className="text-blue-500" />
-                     Manage Supported Cities
-                  </h4>
-                  <div className="flex gap-2 mb-6">
-                     <input type="text" placeholder="Enter new city name..." value={newCityName} onChange={(e) => setNewCityName(e.target.value)} className="flex-1 px-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" />
-                     <button onClick={handleAddCity} className="px-6 py-2 bg-blue-600 text-white rounded-lg font-bold hover:bg-blue-700 transition">Add City</button>
-                  </div>
-                  <div className="bg-gray-50 p-4 rounded-xl border border-gray-100 max-h-[300px] overflow-y-auto">
-                     {availableCities.length === 0 ? <p className="text-gray-400 text-center py-4 italic">No cities added yet.</p> : (
-                        <div className="flex flex-wrap gap-2">
-                           {availableCities.sort().map((c, i) => (
-                              <div key={i} className="flex items-center gap-2 bg-white border border-gray-200 px-3 py-1.5 rounded-full shadow-sm">
-                                 <span className="text-sm font-medium text-gray-700">{c}</span>
-                                 <button onClick={() => handleDeleteCity(c)} className="text-gray-400 hover:text-red-500 p-0.5"><Trash2 size={14} /></button>
-                              </div>
-                           ))}
-                        </div>
-                     )}
-                  </div>
-               </section>
+            <div className="mt-8">
+              <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-4">
+                <h4 className="text-lg font-bold text-gray-800">Present Cities</h4>
+                <div className="relative w-full md:w-64">
+                  <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                  <input 
+                    type="text" 
+                    placeholder="Search cities..." 
+                    value={citySearch}
+                    onChange={(e) => setCitySearch(e.target.value)}
+                    className="w-full pl-10 pr-4 py-2 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+                  />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                {(() => {
+                   const hardcoded = Object.values(citiesByState).flat();
+                   const localAdmin = JSON.parse(localStorage.getItem("admin_cities") || "{}");
+                   const localList = Object.values(localAdmin).flat();
+                   const blacklisted = JSON.parse(localStorage.getItem("blacklisted_cities") || "[]");
+                   
+                   const merged = hardcoded.map(h => {
+                     const localVersion = localList.find(l => l.slug === h.slug);
+                     return localVersion || h;
+                   });
+                   
+                   const trulyNewLocal = localList.filter(l => !hardcoded.find(hc => hc.slug === l.slug));
+                   
+                   const allDisplay = [...merged, ...trulyNewLocal]
+                    .filter(c => !blacklisted.includes(c.slug))
+                    .filter(c => c.name.toLowerCase().includes(citySearch.toLowerCase()));
+                   
+                   if (allDisplay.length === 0) return <p className="text-sm text-gray-400 italic col-span-full py-4 text-center">No cities found matching your search.</p>;
+                   
+                   return allDisplay.map((city, idx) => {
+                     const hardcodedAttrs = attractionsByCity[city.slug] || [];
+                     const adminAttrs = (JSON.parse(localStorage.getItem("admin_attractions") || "{}"))[city.slug] || [];
+                     const totalAttractions = [...hardcodedAttrs, ...adminAttrs].length;
 
-               <section>
-                  <h4 className="text-lg font-bold text-gray-800 mb-4 border-b pb-2 flex items-center gap-2">
-                     <Server size={20} className="text-indigo-600" />
-                     Service Status
-                  </h4>
-                  <div className="space-y-4">
-                     <div className="flex justify-between items-center p-4 bg-gray-50 rounded-lg border border-gray-100">
-                        <div className="flex items-center gap-3">
-                           <div className={`w-3 h-3 rounded-full ${backendStatus === 'online' ? 'bg-green-500' : backendStatus === 'offline' ? 'bg-red-500' : 'bg-yellow-500'}`} />
-                           <span className="font-medium">Backend API Status</span>
-                        </div>
-                        <span className={`text-xs font-bold uppercase ${backendStatus === 'online' ? 'text-green-600' : 'text-red-500'}`}>{backendStatus}</span>
-                     </div>
-                     <div className="p-4 bg-gray-50 rounded-lg border border-gray-100">
-                        <div className="flex items-center gap-2 mb-2">
-                           <Mail size={16} className="text-gray-400" />
-                           <p className="text-xs text-gray-500 uppercase font-bold">Email Service (Gmail)</p>
-                        </div>
-                        <p className="text-sm font-medium flex items-center justify-between">
-                           devisrichowdaryk@gmail.com
-                           <span className="text-[10px] bg-green-100 text-green-700 px-2 py-0.5 rounded">ONLINE</span>
-                        </p>
-                     </div>
-                  </div>
-               </section>
+                     return (
+                       <div key={`${city.slug}-${idx}`} className="p-3 border border-gray-100 rounded-lg bg-gray-50 flex items-center justify-between shadow-sm">
+                         <div>
+                           <p className="font-semibold text-gray-900 text-sm">{city.name}</p>
+                           <p className="text-xs text-gray-500 font-medium">
+                             {totalAttractions} Attractions
+                           </p>
+                         </div>
+                         <div className="flex gap-1">
+                           <button 
+                             onClick={() => {
+                               setEditingCitySlug(city.slug);
+                               setNewCity({
+                                 name: city.name,
+                                 stateName: city.stateName,
+                                 image: city.image.includes("unsplash") && city.image.includes("464822759023") ? "" : city.image,
+                                 knownFor: city.knownFor
+                               });
+                               window.scrollTo({ top: 0, behavior: 'smooth' });
+                             }}
+                             className="p-1.5 text-blue-500 hover:bg-blue-50 rounded-lg transition"
+                             title="Edit City"
+                           >
+                             <Edit size={16} />
+                           </button>
+                           <button 
+                             onClick={() => handleDeleteCity(city.slug)}
+                             className="p-1.5 text-red-500 hover:bg-red-50 rounded-lg transition"
+                             title="Delete City"
+                           >
+                             <LogOut size={16} className="rotate-90" />
+                           </button>
+                         </div>
+                       </div>
+                     );
+                  });
+                })()}
+              </div>
             </div>
 
-            <div className="mt-12 pt-8 border-t border-gray-200 text-gray-800">
-               <h4 className="text-lg font-bold text-gray-800 mb-6 flex items-center gap-2">
-                  <MapPin size={22} className="text-orange-500" />
-                  Manage City Attractions
-               </h4>
-               <div className="bg-gray-50/50 p-6 rounded-2xl border border-gray-200 flex flex-col md:flex-row gap-8">
-                  <div className="flex-1 space-y-4 text-gray-800">
-                     <div>
-                        <label className="text-xs font-bold uppercase text-gray-500 block mb-1">Select City</label>
-                        <select value={attractionForm.city} onChange={(e) => setAttractionForm({...attractionForm, city: e.target.value})} className="w-full px-4 py-2 border rounded-lg">
-                           <option value="">-- Choose City --</option>
-                           {availableCities.map(c => <option key={c} value={c}>{c}</option>)}
-                        </select>
-                     </div>
-                     <div>
-                        <label className="text-xs font-bold uppercase text-gray-500 block mb-1">Place Name</label>
-                        <input type="text" value={attractionForm.name} onChange={(e) => setAttractionForm({...attractionForm, name: e.target.value})} placeholder="e.g. Rock Memorial" className="w-full px-4 py-2 border rounded-lg" />
-                     </div>
-                     <div>
-                        <label className="text-xs font-bold uppercase text-gray-500 block mb-1">Quick Description</label>
-                        <textarea value={attractionForm.desc} onChange={(e) => setAttractionForm({...attractionForm, desc: e.target.value})} className="w-full px-4 py-1.5 border rounded-lg" rows="2" />
-                     </div>
-                     <div className="flex gap-4">
-                        <div className="flex-1">
-                           <label className="text-xs font-bold uppercase text-gray-500 block mb-1">Duration</label>
-                           <input type="text" value={attractionForm.duration} onChange={(e) => setAttractionForm({...attractionForm, duration: e.target.value})} className="w-full px-4 py-2 border rounded-lg" />
-                        </div>
-                        <div className="flex-1">
-                           <label className="text-xs font-bold uppercase text-gray-500 block mb-1">Entry Fee</label>
-                           <input type="text" value={attractionForm.entry} onChange={(e) => setAttractionForm({...attractionForm, entry: e.target.value})} className="w-full px-4 py-2 border rounded-lg" />
-                        </div>
-                     </div>
-                     <button onClick={handleAddAttraction} className="w-full py-3 bg-orange-500 text-white rounded-lg font-bold hover:bg-orange-600 transition">Add Attraction</button>
-                  </div>
-                  <div className="flex-1">
-                     <label className="text-xs font-bold uppercase text-gray-500 block mb-3">Custom Attractions for {attractionForm.city || 'Global'}</label>
-                     <div className="bg-white p-4 rounded-xl border border-gray-200 min-h-[400px]">
-                        {(() => {
-                           const cityKey = attractionForm.city.toLowerCase().replace(/\s+/g, '-');
-                           const list = customAttractions[cityKey] || [];
-                           if (list.length === 0) return <p className="text-center text-gray-400 mt-20 italic">No custom attractions for this city.</p>;
-                           return (
-                              <div className="space-y-3">
-                                 {list.map((a, i) => (
-                                    <div key={i} className="p-3 bg-gray-50 rounded-lg flex justify-between items-center border border-gray-100">
-                                       <div><p className="font-bold text-gray-800">{a.name}</p><p className="text-xs text-gray-500">{a.description}</p></div>
-                                       <button onClick={() => handleDeleteAttraction(cityKey, i)} className="text-red-400 hover:text-red-600"><Trash2 size={18} /></button>
-                                    </div>
-                                 ))}
-                              </div>
-                           );
-                        })()}
-                     </div>
-                  </div>
-               </div>
+            <div className="mt-8 pt-8 border-t border-gray-200">
+              <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-4">
+                <h4 className="text-lg font-bold text-gray-800 flex items-center gap-2"><Settings size={20} className="text-gray-500" /> Manage All Attractions</h4>
+                <div className="relative w-full md:w-64">
+                  <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                  <input 
+                    type="text" 
+                    placeholder="Search attractions..." 
+                    value={attrSearch}
+                    onChange={(e) => setAttrSearch(e.target.value)}
+                    className="w-full pl-10 pr-4 py-2 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
+                  />
+                </div>
+              </div>
+              <div className="space-y-3">
+                {(() => {
+                   const localAttractions = JSON.parse(localStorage.getItem("admin_attractions") || "{}");
+                   const blacklisted = JSON.parse(localStorage.getItem("blacklisted_attractions") || "[]");
+                   const allRows = [];
+                   
+                   const hardcodedCities = Object.values(citiesByState).flat();
+                   const localCities = Object.values(JSON.parse(localStorage.getItem("admin_cities") || "{}")).flat();
+                   const allCitySlugs = [...new Set([...hardcodedCities.map(c => c.slug), ...localCities.map(c => c.slug)])];
+                   
+                   allCitySlugs.forEach(citySlug => {
+                     const hardcoded = attractionsByCity[citySlug] || [];
+                     const local = localAttractions[citySlug] || [];
+                     
+                     const merged = hardcoded.map(h => {
+                       const localVersion = local.find(l => l.name === h.name);
+                       return localVersion || h;
+                     });
+                     const trulyNewLocal = local.filter(l => !hardcoded.find(hc => hc.name === l.name));
+                     
+                     [...merged, ...trulyNewLocal].forEach(attr => {
+                        const key = `${citySlug}|${attr.name}`;
+                        if (!blacklisted.includes(key)) {
+                          allRows.push({ citySlug, ...attr });
+                        }
+                     });
+                   });
+                   
+                   const filteredRows = allRows.filter(row => 
+                      row.name.toLowerCase().includes(attrSearch.toLowerCase()) || 
+                      row.citySlug.toLowerCase().includes(attrSearch.toLowerCase())
+                   );
+                   
+                   if (filteredRows.length === 0) return <p className="text-sm text-gray-400 italic py-4 text-center">No attractions found matching your search.</p>;
+                   
+                   return filteredRows.map((attr, idx) => (
+                    <div key={idx} className="flex items-center justify-between p-4 bg-white border border-gray-200 rounded-xl shadow-sm">
+                      <div>
+                        <p className="font-bold text-gray-900">{attr.name}</p>
+                        <p className="text-xs text-gray-500 uppercase font-semibold">City: {attr.citySlug}</p>
+                      </div>
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => {
+                            setEditingAttractionKey({ citySlug: attr.citySlug, name: attr.name });
+                            setNewAttraction({
+                              citySlug: attr.citySlug,
+                              name: attr.name,
+                              description: attr.description,
+                              image: attr.image,
+                              entry: attr.entry,
+                              duration: attr.duration
+                            });
+                            window.scrollTo({ top: 0, behavior: 'smooth' });
+                          }}
+                          className="px-3 py-1.5 bg-blue-50 text-blue-600 text-xs font-bold rounded-lg hover:bg-blue-100 transition"
+                        >
+                          Edit
+                        </button>
+                        <button
+                          onClick={() => handleDeleteAttraction(attr.citySlug, attr.name)}
+                          className="px-3 py-1.5 bg-red-50 text-red-600 text-xs font-bold rounded-lg hover:bg-red-100 transition"
+                        >
+                          Delete
+                        </button>
+                      </div>
+                    </div>
+                  ));
+                })()}
+              </div>
+            </div>
+          </div>
+        )}{/* SETTINGS TAB */}
+        {activeTab === "Settings" && (
+          <div className="bg-white/80 backdrop-blur-md p-8 rounded-xl border border-gray-200/60 shadow-sm min-h-[60vh] flex items-center justify-center">
+            <div className="text-center">
+              <Settings className="mx-auto text-gray-400 mb-4" size={48} />
+              <h3 className="text-2xl font-semibold text-gray-900 mb-2">System Configuration</h3>
+              <p className="text-gray-500">Platform-wide settings and API keys can be managed here.</p>
             </div>
           </div>
         )}
 
         <footer className="mt-20 text-center text-gray-400 font-semibold text-sm pt-8 border-t border-gray-600/50">
-          © {new Date().getFullYear()} TourConnect Administration.
+          © {new Date().getFullYear()} TourMate Administration.
         </footer>
       </main>
     </div>
   );
 }
 
-function StatCard({ title, value, onClick, isHighlighted }) {
+function StatCard({ title, value, onClick }) {
   return (
-    <div 
-      onClick={onClick}
-      className={`bg-white/80 backdrop-blur-md p-5 rounded-xl border shadow-sm transition-all ${
-        isHighlighted ? 'border-orange-400 bg-orange-50/50 ring-2 ring-orange-200 ring-opacity-50 animate-pulse' : 'border-gray-200/60'
-      } ${onClick ? 'cursor-pointer hover:shadow-md hover:border-blue-400' : ''}`}
-    >
-      <p className={`text-sm mb-1 ${isHighlighted ? 'text-orange-700 font-bold' : 'text-gray-500'}`}>{title}</p>
-      <h2 className={`text-3xl font-semibold ${isHighlighted ? 'text-orange-800' : 'text-gray-900'}`}>{value}</h2>
+    <div onClick={onClick} className={`bg-white/80 backdrop-blur-md p-5 rounded-xl border border-gray-200/60 shadow-sm ${onClick ? 'cursor-pointer hover:shadow-md hover:border-blue-400 transition-all' : ''}`}>
+      <p className="text-sm text-gray-500 mb-1">{title}</p>
+      <h2 className="text-3xl font-semibold text-gray-900">{value}</h2>
     </div>
   );
 }
@@ -737,15 +1197,11 @@ function SidebarItem({ label, active, onClick, icon, isDanger }) {
   return (
     <div
       onClick={onClick}
-      className={`
-        px-4 py-2.5 mx-2 rounded-lg cursor-pointer transition-colors flex items-center gap-3 text-sm font-medium
-        ${active 
-          ? "bg-white/80 text-gray-900 shadow-sm border border-gray-200/50" 
-          : isDanger
-            ? "text-red-500 hover:bg-red-50 mt-4"
+      className={`px-4 py-2.5 mx-2 rounded-lg cursor-pointer transition-colors flex items-center gap-3 text-sm font-medium
+        ${active ? "bg-white/80 text-gray-900 shadow-sm border border-gray-200/50"
+          : isDanger ? "text-red-500 hover:bg-red-50 mt-4"
             : "text-gray-500 hover:bg-white/60 hover:text-gray-900"
-        }
-      `}
+        }`}
     >
       {icon}
       {label}

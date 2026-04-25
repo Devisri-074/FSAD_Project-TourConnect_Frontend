@@ -13,18 +13,21 @@ function Guide() {
   
   const allUsers = JSON.parse(localStorage.getItem("users")) || [];
   const liveGuides = allUsers
-    .filter(u => u.role === "guide" && u.approvalStatus === "approved")
+    .filter(u => 
+      u.role === "guide" && 
+      u.approvalStatus === "approved" &&
+      (u.city?.toLowerCase() === city?.toLowerCase() || !city)
+    )
     .map(u => ({
        name: u.fullName,
-       image: "https://images.unsplash.com/photo-1522075469751-3a6694fb2f61?q=80&w=2080&auto=format&fit=crop", // generic verified guide headshot
+       userId: u.id,
+       image: "https://images.unsplash.com/photo-1522075469751-3a6694fb2f61?q=80&w=2080&auto=format&fit=crop",
        speciality: "Cultural & Heritage Expert",
        rating: 4.8,
        language: "English, Local Native",
-       price: 1500, // Standard platform rate
+       price: 1500,
        isLiveSystemGuide: true
     }));
-
-  // We append live guides to ANY city during the demo so they can be booked anywhere!
   const guidesData = [...hardcodedGuides, ...liveGuides];
 
   const [search, setSearch] = useState("");
@@ -158,9 +161,9 @@ function Guide() {
                     if (isBooked) return;
 
                     const cityKey = city.toLowerCase().trim();
-
                     localStorage.setItem(`guideName_${cityKey}`, guide.name);
                     localStorage.setItem(`guidePrice_${cityKey}`, guide.price);
+                    if (guide.userId) localStorage.setItem(`guideUserId_${cityKey}`, guide.userId);
 
                     const existingStay = localStorage.getItem(`homestayName_${cityKey}`);
 

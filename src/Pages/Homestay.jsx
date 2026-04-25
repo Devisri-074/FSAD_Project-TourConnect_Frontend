@@ -188,6 +188,7 @@ function Homestay() {
                       const cityKey = city.toLowerCase().trim();
                       localStorage.setItem(`homestayName_${cityKey}`, stay.name);
                       localStorage.setItem(`homestayPrice_${cityKey}`, stay.price);
+                      if (stay.hostId) localStorage.setItem(`hostId_${cityKey}`, stay.hostId);
 
                       const existingGuide = localStorage.getItem(`guideName_${cityKey}`);
 

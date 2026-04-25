@@ -126,13 +126,12 @@ function Plan() {
       return;
     }
 
-    // ✅ SAFE USER CHECK
-    const storedUser = localStorage.getItem("user");
-    const currentUser = storedUser ? JSON.parse(storedUser) : null;
+    const storedUserRaw = localStorage.getItem("user");
+    const currentUser = (storedUserRaw && storedUserRaw !== "null" && storedUserRaw !== "undefined") 
+      ? JSON.parse(storedUserRaw) 
+      : null;
 
-    // 🔥 NOT LOGGED IN → MESSAGE + REDIRECT
-    // 🔥 NOT LOGGED IN → SHOW POPUP FIRST
-    if (!currentUser) {
+    if (!currentUser || !currentUser.email) {
       setPopupMessage("Please login to save your plan 🔐");
       setShowPopup(true);
       setRedirectToLogin(true);
@@ -176,6 +175,10 @@ function Plan() {
   guidePrice:
     Number(localStorage.getItem(`guidePrice_${city.toLowerCase().trim()}`)) || 0,
 
+  // 🔥 ADD THESE FOR DASHBOARD SYNC
+  hostId: localStorage.getItem(`hostId_${city.toLowerCase().trim()}`),
+  guideUserId: localStorage.getItem(`guideUserId_${city.toLowerCase().trim()}`),
+
   // 🔥 ADD THIS (IMPORTANT FOR HOST)
   status: "pending",
 
@@ -193,9 +196,8 @@ function Plan() {
     try {
       await fetch("http://localhost:8080/api/bookings", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           city: city,
           homestayName: homestayNameFromStorage,
@@ -205,7 +207,8 @@ function Plan() {
           endDate: endDate,
           homestayPrice: homestayPrice,
           guidePrice: guidePrice,
-          hostId: 1,
+          hostId: Number(localStorage.getItem(`hostId_${city.toLowerCase().trim()}`)) || null,
+          status: "PENDING",
         }),
       });
     } catch (error) {
@@ -341,10 +344,12 @@ function Plan() {
                 }
 
                 // ✅ 2. CHECK LOGIN
-                const storedUser = localStorage.getItem("user");
-                const currentUser = storedUser ? JSON.parse(storedUser) : null;
+                const storedUserRaw = localStorage.getItem("user");
+                const currentUser = (storedUserRaw && storedUserRaw !== "null" && storedUserRaw !== "undefined") 
+                  ? JSON.parse(storedUserRaw) 
+                  : null;
 
-                if (!currentUser) {
+                if (!currentUser || !currentUser.email) {
                   setPopupMessage("Please login to book homestay 🔐");
                   setShowPopup(true);
                   setRedirectToLogin(true);
@@ -386,10 +391,12 @@ function Plan() {
                 }
 
                 // ✅ 2. CHECK LOGIN
-                const storedUser = localStorage.getItem("user");
-                const currentUser = storedUser ? JSON.parse(storedUser) : null;
+                const storedUserRaw = localStorage.getItem("user");
+                const currentUser = (storedUserRaw && storedUserRaw !== "null" && storedUserRaw !== "undefined") 
+                  ? JSON.parse(storedUserRaw) 
+                  : null;
 
-                if (!currentUser) {
+                if (!currentUser || !currentUser.email) {
                   setPopupMessage("Please login to hire a guide 🔐");
                   setShowPopup(true);
                   setRedirectToLogin(true);
@@ -418,7 +425,7 @@ function Plan() {
                   setShowPopup(false);
 
                   if (redirectToLogin) {
-                    navigate("/login", { state: { from: "/plan" } });
+                    navigate("/login", { state: { from: "/plan", city: city } });
                     setRedirectToLogin(false);
                   } else if (popupMessage.includes("Plan Saved") || popupMessage.includes("Plan already saved")) {
                     navigate("/dashboard");

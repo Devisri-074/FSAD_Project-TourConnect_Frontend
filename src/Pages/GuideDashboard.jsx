@@ -27,21 +27,26 @@ function GuideDashboard() {
     const storedBookings = localStorage.getItem("savedPlans");
     const bookingsData = storedBookings ? JSON.parse(storedBookings) : [];
 
-    const mergeGuideTours = (data) => {
+    const mergeGuideTours = (data, replace = false) => {
         const toursWithGuides = data.filter(b => {
-             // Extract Guide properties successfully whether from local or backend 
-             const cityKey = b.city?.toLowerCase().trim();
-             const fallbackGuide = localStorage.getItem(`guideName_${cityKey}`);
-             const assignedGuide = b.guideName && b.guideName !== "N/A" ? b.guideName : fallbackGuide;
+             const assignedGuide = b.guideName && b.guideName !== "N/A" ? b.guideName : "N/A";
+             if (assignedGuide === "N/A" || !currentUser.fullName) return false;
+
+             const cleanAssigned = assignedGuide.toLowerCase().trim();
+             const cleanCurrent = currentUser.fullName.toLowerCase().trim();
+
+             // ⚖️ MATCH LOGIC: Check if names match or ID matches
+             const isNameMatch = cleanAssigned === cleanCurrent || 
+                                cleanAssigned.includes(cleanCurrent) || 
+                                cleanCurrent.includes(cleanAssigned);
              
-             // 1. Strict actual assignment validation
-             const isStrictMatch = assignedGuide === currentUser.fullName;
+             const isIdMatch = b.guideUserId && String(b.guideUserId) === String(currentUser.id);
+
+             // 🔥 DEMO FALLBACK: Show unassigned tours to the demo guide
+             const isDemoGuide = currentUser.email === "guide@test.com";
+             const isUnassigned = !b.guideUserId || b.guideUserId === "null" || b.guideUserId === "N/A";
              
-             // 2. Local Testing Bridge: If logging in as generic "Demo", link to the current testing user's actual booking
-             // This ensures you see the 'Madurai' tour you booked but automatically hides 'Udaipur' from 'host@test.com'!
-             const isTestConnection = b.userEmail === 'devisrichowdaryk@gmail.com' && currentUser.fullName.includes("Demo") && !!assignedGuide;
-             
-             return (isStrictMatch || isTestConnection) && assignedGuide !== "N/A";
+             return isNameMatch || isIdMatch || (isDemoGuide && isUnassigned);
         }).map(b => {
             const cityKey = b.city?.toLowerCase().trim();
             const price = b.guidePrice ? b.guidePrice : (Number(localStorage.getItem(`guidePrice_${cityKey}`)) || 1200);
@@ -50,23 +55,34 @@ function GuideDashboard() {
 
         setUser(currentUser);
         setAssignedTours(prev => {
+             if (replace) return toursWithGuides;
+             
              const merged = [...prev];
-             toursWithGuides.forEach(t => { if(!merged.find(p => p.id === t.id)) merged.push(t) });
+             toursWithGuides.forEach(t => {
+                 // Create a unique key based on content, not just ID (IDs might differ between local/backend)
+                 const getUniqueKey = (item) => `${item.city}-${item.startDate}-${item.endDate}-${item.userEmail}`.toLowerCase().trim();
+                 const newKey = getUniqueKey(t);
+                 
+                 const alreadyExists = merged.some(p => getUniqueKey(p) === newKey);
+                 if (!alreadyExists) {
+                     merged.push(t);
+                 }
+             });
              return merged;
         });
     };
 
     // Load offline tours safely first
-    mergeGuideTours(bookingsData);
+    mergeGuideTours(bookingsData, true);
 
     // Fetch live backend metrics
-    fetch("http://localhost:8080/api/bookings")
+    fetch("http://localhost:8080/api/bookings", { credentials: "include" })
       .then(res => res.json())
       .then(data => {
          if(data && Array.isArray(data)) {
-            mergeGuideTours(data);
+            mergeGuideTours(data, false);
          }
-      }).catch(err => console.error("Guide Backend Fetch Failed:", err));
+      }).catch(() => {});
   };
 
   useEffect(() => {
@@ -80,20 +96,33 @@ function GuideDashboard() {
     navigate("/", { replace: true });
   };
 
-  const handleUpdateStatus = (tourId, newStatus) => {
+  const handleUpdateStatus = (booking, newStatus) => {
+    const getUniqueKey = (item) => `${item.city}-${item.startDate}-${item.endDate}-${item.userEmail}`.toLowerCase().trim();
+    const targetKey = getUniqueKey(booking);
+
     const storedBookings = JSON.parse(localStorage.getItem("savedPlans")) || [];
-    const updatedBookings = storedBookings.map(b => b.id === tourId ? { ...b, guideStatus: newStatus } : b);
+    const updatedBookings = storedBookings.map(b =>
+      getUniqueKey(b) === targetKey ? { ...b, guideStatus: newStatus } : b
+    );
     localStorage.setItem("savedPlans", JSON.stringify(updatedBookings));
-    
-    setAssignedTours(prev => prev.map(t => t.id === tourId ? { ...t, guideStatus: newStatus } : t));
+    setAssignedTours(prev => prev.map(t =>
+      getUniqueKey(t) === targetKey ? { ...t, guideStatus: newStatus } : t
+    ));
 
-    // Attempt backend sync
-
-    fetch(`http://localhost:8080/api/bookings/${tourId}/status`, {
-       method: "PUT",
-       headers: { "Content-Type": "application/json" },
-       body: JSON.stringify({ status: newStatus })
-    }).catch(err => console.error("API backend offline for save:", err));
+    // Find real numeric DB id by fetching all bookings and matching
+    fetch("http://localhost:8080/api/bookings", { credentials: "include" })
+      .then(res => res.json())
+      .then(data => {
+        const match = data.find(b => getUniqueKey(b) === targetKey);
+        if (match && match.id) {
+          fetch(`http://localhost:8080/api/bookings/${match.id}/status`, {
+            method: "PUT",
+            credentials: "include",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ status: newStatus })
+          }).catch(() => {});
+        }
+      }).catch(() => {});
   };
 
   useEffect(() => {
@@ -263,8 +292,8 @@ function GuideDashboard() {
                         <div className="flex gap-2">
                            {(!t.guideStatus || t.guideStatus === 'pending') && (
                              <>
-                               <button onClick={() => handleUpdateStatus(t.id, 'confirmed')} className="px-3 py-1.5 bg-green-500 text-white text-sm rounded hover:bg-green-600 transition">Accept</button>
-                               <button onClick={() => handleUpdateStatus(t.id, 'rejected')} className="px-3 py-1.5 bg-red-500 text-white text-sm rounded hover:bg-red-600 transition">Reject</button>
+                               <button onClick={() => handleUpdateStatus(t, 'confirmed')} className="px-3 py-1.5 bg-green-500 text-white text-sm rounded hover:bg-green-600 transition">Accept</button>
+                               <button onClick={() => handleUpdateStatus(t, 'rejected')} className="px-3 py-1.5 bg-red-500 text-white text-sm rounded hover:bg-red-600 transition">Reject</button>
                              </>
                            )}
                            <button onClick={() => openChat(t.userEmail, t.city)} className="px-4 py-2 bg-slate-900 text-white text-sm rounded-lg hover:bg-slate-800 transition">Contact Client</button>

@@ -1,9 +1,15 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { MapPin, Eye, EyeOff } from "lucide-react";
+import { MapPin, Eye, EyeOff, Users } from "lucide-react";
 
 function Signup() {
   const navigate = useNavigate();
+  const [showAccountPicker, setShowAccountPicker] = useState(false);
+  const [showCustomEmail, setShowCustomEmail] = useState(false);
+  const [customGoogleEmail, setCustomGoogleEmail] = useState("");
+  const [customGoogleName, setCustomGoogleName] = useState("");
+  const [customGooglePassword, setCustomGooglePassword] = useState("");
+  const [customGoogleStep, setCustomGoogleStep] = useState("email"); // "email" | "password"
 
   const [form, setForm] = useState({
     fullName: "",
@@ -12,7 +18,8 @@ function Signup() {
     password: "",
     confirmPassword: "",
     countryCode: "+91",
-    role: "tourist", // ✅ ADDED
+    role: "tourist", 
+    city: "Hyderabad", // ✅ ADDED
   });
 
   const [showPassword, setShowPassword] = useState(false);
@@ -31,8 +38,16 @@ function Signup() {
   }
 
   const roleNeedsApproval = form.role.toLowerCase() === "guide" || form.role.toLowerCase() === "host";
+  const searchEmail = form.email.trim().toLowerCase();
 
   const existingUsers = JSON.parse(localStorage.getItem("users")) || [];
+  
+  // ✅ PREVENT DUPLICATE EMAILS
+  const isDuplicate = existingUsers.some(u => u.email && u.email.trim().toLowerCase() === searchEmail);
+  if (isDuplicate) {
+    alert("An account with this email already exists! Please use a different email or Login.");
+    return;
+  }
   const newUser = {
     fullName: form.fullName,
     email: form.email.trim(),
@@ -40,13 +55,16 @@ function Signup() {
     countryCode: form.countryCode,
     password: form.password,
     role: form.role.toLowerCase(),
+    city: form.role === "tourist" ? "N/A" : form.city, // ✅ STORE CITY
     approvalStatus: roleNeedsApproval ? "pending" : "approved",
+    approved: !roleNeedsApproval,
     id: Date.now() // Mock ID for offline mode
   };
 
   try {
     const response = await fetch("/api/auth/signup", {
       method: "POST",
+      credentials: "include",
       headers: {
         "Content-Type": "application/json",
       },
@@ -90,6 +108,44 @@ function Signup() {
   }
 };
 
+  const handleGoogleLogin = () => {
+    // 🚀 SHOW VISUAL SIMULATION
+    setShowAccountPicker(true);
+  };
+
+  const loginWithGoogle = (fullName, email) => {
+    const googleUser = {
+      id: "google_" + Date.now(),
+      fullName,
+      email,
+      role: "TOURIST",
+      approvalStatus: "approved"
+    };
+    localStorage.setItem("user", JSON.stringify(googleUser));
+    const allUsers = JSON.parse(localStorage.getItem("users")) || [];
+    if (!allUsers.find(u => u.email === email)) {
+      allUsers.push({ fullName, email, role: "tourist", approvalStatus: "approved" });
+      localStorage.setItem("users", JSON.stringify(allUsers));
+    }
+    setShowAccountPicker(false);
+    setShowCustomEmail(false);
+    alert("Signed up & Logged in via Google successfully!");
+    navigate("/dashboard");
+  };
+
+  const selectDemoAccount = () => loginWithGoogle("DevisriChowdary Koya", "devisrichowdarykoya@gmail.com");
+
+  const handleCustomGoogleEmailNext = () => {
+    if (!customGoogleEmail.includes("@")) { alert("Enter a valid email"); return; }
+    setCustomGoogleStep("password");
+  };
+
+  const handleCustomGoogleSubmit = () => {
+    if (!customGooglePassword) { alert("Enter your password"); return; }
+    const name = customGoogleName.trim() || customGoogleEmail.split("@")[0];
+    loginWithGoogle(name, customGoogleEmail.trim());
+  };
+
   return (
     <div
       style={{
@@ -99,6 +155,99 @@ function Signup() {
         overflow: "hidden",
       }}
     >
+      {/* ✅ GOOGLE ACCOUNT PICKER SIMULATION MODAL */}
+      {showAccountPicker && (
+        <div style={{
+          position: 'fixed', inset: 0, zIndex: 100,
+          backgroundColor: 'rgba(0,0,0,0.6)', display: 'flex', justifyContent: 'center', alignItems: 'center'
+        }}>
+          <div style={{
+            backgroundColor: 'white', width: '360px', borderRadius: '12px', padding: '24px',
+            color: '#3c4043', textAlign: 'center', boxShadow: '0 8px 30px rgba(0,0,0,0.3)',
+            animation: 'slideUp 0.3s ease-out'
+          }}>
+            <img src="https://www.gstatic.com/images/branding/product/1x/gsa_512dp.png" width="40" alt="G" style={{marginBottom:'10px'}} />
+            <h3 style={{fontSize:'22px', fontWeight:'500', marginBottom:'5px'}}>Choose an account</h3>
+            <p style={{fontSize:'14px', color:'#5f6368', marginBottom:'20px'}}>to continue to TourConnect</p>
+            
+            <div 
+              onClick={selectDemoAccount}
+              style={{
+                display:'flex', alignItems:'center', gap:'12px', padding:'12px', 
+                borderBottom:'1px solid #e8eaed', cursor:'pointer', textAlign:'left'
+              }}
+              onMouseOver={(e) => e.currentTarget.style.backgroundColor = '#f8f9fa'}
+              onMouseOut={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+            >
+              <div style={{width:'36px', height:'36px', backgroundColor:'#1a73e8', borderRadius:'50%', display:'flex', justifyContent:'center', alignItems:'center', color:'white', fontWeight:'bold'}}>D</div>
+              <div>
+                <p style={{fontSize:'14px', fontWeight:'500', margin:0}}>DevisriChowdary Koya</p>
+                <p style={{fontSize:'12px', color:'#5f6368', margin:0}}>devisrichowdarykoya@gmail.com</p>
+              </div>
+            </div>
+
+            <div 
+              onClick={() => setShowCustomEmail(true)}
+              style={{display:'flex', alignItems:'center', gap:'12px', padding:'12px', cursor:'pointer', textAlign:'left'}}
+              onMouseOver={(e) => e.currentTarget.style.backgroundColor = '#f8f9fa'}
+              onMouseOut={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+            >
+              <div style={{width:'36px', height:'36px', border:'1px solid #e8eaed', borderRadius:'50%', display:'flex', justifyContent:'center', alignItems:'center'}}>
+                <Users size={18} color="#5f6368" />
+              </div>
+              <p style={{fontSize:'14px', fontWeight:'500', margin:0}}>Use another account</p>
+            </div>
+
+            {showCustomEmail && customGoogleStep === "email" && (
+              <div style={{marginTop:'12px', textAlign:'left'}}>
+                <input
+                  placeholder="Name (optional)"
+                  value={customGoogleName}
+                  onChange={e => setCustomGoogleName(e.target.value)}
+                  style={{width:'100%', padding:'8px', marginBottom:'8px', borderRadius:'6px', border:'1px solid #e8eaed', fontSize:'13px', boxSizing:'border-box'}}
+                />
+                <input
+                  placeholder="Email"
+                  value={customGoogleEmail}
+                  onChange={e => setCustomGoogleEmail(e.target.value)}
+                  style={{width:'100%', padding:'8px', marginBottom:'8px', borderRadius:'6px', border:'1px solid #e8eaed', fontSize:'13px', boxSizing:'border-box'}}
+                />
+                <button onClick={handleCustomGoogleEmailNext} style={{width:'100%', padding:'8px', backgroundColor:'#1a73e8', color:'white', border:'none', borderRadius:'6px', cursor:'pointer', fontSize:'13px'}}>Next</button>
+              </div>
+            )}
+
+            {showCustomEmail && customGoogleStep === "password" && (
+              <div style={{marginTop:'12px', textAlign:'left'}}>
+                <p style={{fontSize:'13px', color:'#3c4043', marginBottom:'8px'}}>Welcome, <strong>{customGoogleName || customGoogleEmail.split("@")[0]}</strong></p>
+                <p style={{fontSize:'12px', color:'#5f6368', marginBottom:'8px'}}>{customGoogleEmail}</p>
+                <input
+                  type="password"
+                  placeholder="Enter your password"
+                  value={customGooglePassword}
+                  onChange={e => setCustomGooglePassword(e.target.value)}
+                  style={{width:'100%', padding:'8px', marginBottom:'8px', borderRadius:'6px', border:'1px solid #e8eaed', fontSize:'13px', boxSizing:'border-box'}}
+                />
+                <div style={{display:'flex', gap:'8px'}}>
+                  <button onClick={() => setCustomGoogleStep("email")} style={{flex:1, padding:'8px', backgroundColor:'white', color:'#1a73e8', border:'1px solid #e8eaed', borderRadius:'6px', cursor:'pointer', fontSize:'13px'}}>Back</button>
+                  <button onClick={handleCustomGoogleSubmit} style={{flex:1, padding:'8px', backgroundColor:'#1a73e8', color:'white', border:'none', borderRadius:'6px', cursor:'pointer', fontSize:'13px'}}>Sign in</button>
+                </div>
+              </div>
+            )}
+
+            <p style={{fontSize:'12px', color:'#5f6368', marginTop:'24px', textAlign:'left', lineHeight:'1.5'}}>
+              To continue, Google will share your name, email address, and profile picture with TourConnect.
+            </p>
+            
+            <button onClick={() => { setShowAccountPicker(false); setShowCustomEmail(false); setCustomGoogleStep("email"); setCustomGooglePassword(""); }} style={{marginTop:'20px', color:'#1a73e8', fontWeight:'500', background:'none', border:'none', cursor:'pointer'}}>Cancel</button>
+          </div>
+          <style>{`
+            @keyframes slideUp {
+              from { transform: translateY(30px); opacity: 0; }
+              to { transform: translateY(0); opacity: 1; }
+            }
+          `}</style>
+        </div>
+      )}
       <img
         src="https://picsum.photos/1920/1080"
         alt="bg"
@@ -206,7 +355,29 @@ function Signup() {
                 <option value="guide">Guide 👨‍🏫</option>
                 <option value="host">Host 🏡</option>
               </select>
+              {(form.role === "guide" || form.role === "host") && (
+                <p style={{ fontSize: "11px", color: "#f4b400", marginTop: "4px", opacity: 0.9 }}>
+                  * This role requires manual Admin approval before you can access your dashboard.
+                </p>
+              )}
             </div>
+
+            {/* ✅ CITY/AREA field for Guides/Hosts */}
+            {(form.role === "guide" || form.role === "host") && (
+              <div style={{ marginBottom: "12px" }}>
+                <label>Operating City / Area</label>
+                <select
+                  name="city"
+                  value={form.city}
+                  onChange={handleChange}
+                  style={inputStyle}
+                >
+                  {(JSON.parse(localStorage.getItem("availableCities")) || ["Hyderabad", "Warangal", "Mysore", "Chennai", "Madurai", "Jaipur", "Udaipur", "Mumbai", "Pune", "Delhi", "Bangalore", "Goa", "Kochi", "Munnar", "Kolkata", "Manali", "Shimla"]).sort().map(city => (
+                    <option key={city} value={city}>{city}</option>
+                  ))}
+                </select>
+              </div>
+            )}
 
             <div style={{ marginBottom: "12px" }}>
               <label>Password</label>
@@ -252,7 +423,7 @@ function Signup() {
 
             <button style={btnStyle}>Create an account</button>
 
-            <button type="button" style={outlineBtn}>
+            <button type="button" onClick={handleGoogleLogin} style={outlineBtn}>
               Sign up with Google
             </button>
           </form>

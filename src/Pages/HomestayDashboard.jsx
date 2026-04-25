@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { 
   MapPin, Home as HomeIcon, LogOut, Wallet, User as UserIcon, ArrowLeft, Calendar, MessageSquare, Plus, X, List
 } from "lucide-react";
+import { citiesByState } from "../data/cities";
 
 function HomestayDashboard() {
   const navigate = useNavigate();
@@ -10,83 +11,184 @@ function HomestayDashboard() {
   const [user, setUser] = useState(null);
   const [reservedStays, setReservedStays] = useState([]);
   const [activeTab, setActiveTab] = useState("Dashboard");
-  const [myStays, setMyStays] = useState([]);
+  const [myProperties, setMyProperties] = useState([]);
+  const [isListingModalOpen, setIsListingModalOpen] = useState(false);
+  const [newProperty, setNewProperty] = useState({
+    name: "",
+    citySlug: "",
+    description: "",
+    price: "",
+    features: "",
+    image: ""
+  });
+
+  const handleListingSubmit = (e) => {
+    e.preventDefault();
+    if (!newProperty.citySlug || !newProperty.name) return;
+
+    // Smart Image Fallback
+    const finalImage = newProperty.image || "https://images.unsplash.com/photo-1518780664697-55e3ad937233?auto=format&fit=crop&q=80&w=2000";
+
+    const propertyData = {
+      ...newProperty,
+      id: `prop_${Date.now()}`,
+      hostId: user.id,
+      hostName: user.fullName,
+      image: finalImage,
+      status: "pending", // Requiring Admin Approval
+      createdAt: new Date().toISOString()
+    };
+
+    const pending = JSON.parse(localStorage.getItem("pending_properties") || "[]");
+    pending.push(propertyData);
+    localStorage.setItem("pending_properties", JSON.stringify(pending));
+
+    alert("Property submitted! It will be visible once the Admin approves it.");
+    setIsListingModalOpen(false);
+    setNewProperty({ name: "", citySlug: "", description: "", price: "", features: "", image: "" });
+    loadProperties();
+  };
+
+  const loadProperties = () => {
+    const approved = JSON.parse(localStorage.getItem("homestays") || "[]");
+    const pending = JSON.parse(localStorage.getItem("pending_properties") || "[]");
+    const currentUser = JSON.parse(localStorage.getItem("user"));
+    
+    const userApproved = approved.filter(p => String(p.hostId) === String(currentUser?.id));
+    const userPending = pending.filter(p => String(p.hostId) === String(currentUser?.id));
+    
+    setMyProperties([...userApproved, ...userPending]);
+  };
 
   useEffect(() => {
-  const storedUser = localStorage.getItem("user");
+    loadProperties();
+  }, [user]);
 
-  if (!storedUser || storedUser === "null") {
-    navigate("/login");
-    return;
-  }
+  useEffect(() => {
+  const loadData = () => {
+    const storedUser = localStorage.getItem("user");
 
-  const currentUser = JSON.parse(storedUser);
+    if (!storedUser || storedUser === "null") {
+      navigate("/login");
+      return;
+    }
 
-  if (!currentUser || !currentUser.id) {
-    navigate("/login");
-    return;
-  }
+    const currentUser = JSON.parse(storedUser);
 
-  if (currentUser.role?.toLowerCase() !== "host") {
-    navigate("/login");
-    return;
-  }
+    if (!currentUser || !currentUser.id) {
+      navigate("/login");
+      return;
+    }
 
-  setUser(currentUser);
+    if (currentUser.role?.toLowerCase() !== "host") {
+      navigate("/login");
+      return;
+    }
 
-  const storedBookings = localStorage.getItem("savedPlans");
-  const bookingsData = storedBookings ? JSON.parse(storedBookings) : [];
+    setUser(currentUser);
 
-  const plansWithStays = bookingsData
-    .filter(b => {
-      const cityVal = b.city || "";
-      const cityKey = cityVal.toLowerCase().trim();
-      const fallbackName = localStorage.getItem(`homestayName_${cityKey}`);
-      const actualStay =
-        b.homestayName && b.homestayName !== "N/A"
-          ? b.homestayName
-          : fallbackName;
-      return !!actualStay;
-    })
-    .map(b => {
-      const cityVal = b.city || "";
-      const cityKey = cityVal.toLowerCase().trim();
-      const price =
-        b.homestayPrice ||
-        Number(localStorage.getItem(`homestayPrice_${cityKey}`)) ||
-        1500;
-      return { ...b, homestayPrice: price };
-    });
+    const storedBookings = localStorage.getItem("savedPlans");
+    const bookingsData = storedBookings ? JSON.parse(storedBookings) : [];
 
-  setReservedStays(plansWithStays);
-}, [navigate]);
+    const plansWithStays = bookingsData
+      .filter(b => {
+        const cityVal = b.city || "";
+        const cityKey = cityVal.toLowerCase().trim();
+        const fallbackName = localStorage.getItem(`homestayName_${cityKey}`);
+        const actualStay =
+          b.homestayName && b.homestayName !== "N/A"
+            ? b.homestayName
+            : fallbackName;
+        
+        if (!actualStay) return false;
 
-useEffect(() => {
-  if (!user) return;
+        // ✅ MATCH BY NAME (for existing hardcoded homestays if host name matches)
+        const isNameMatch = actualStay.toLowerCase().trim() === currentUser.fullName.toLowerCase().trim() ||
+                            actualStay.toLowerCase().includes(currentUser.fullName.toLowerCase()) ||
+                            currentUser.fullName.toLowerCase().includes(actualStay.toLowerCase());
+        
+        // ✅ MATCH BY ID (for new properties)
+        const isHostMatch = String(b.hostId) === String(currentUser.id);
+        
+        // 🔥 DEMO FALLBACK: Show unassigned bookings to the demo host
+        const isDemoHost = currentUser.email === "host@test.com";
+        const isUnassigned = !b.hostId || b.hostId === "null" || b.hostId === "N/A";
 
-  // Load backend API bookings if backend is live
-  fetch(`http://localhost:8080/api/bookings/host/${user.id}`)
-    .then(res => res.json())
-    .then(data => {
-      if(data && data.length > 0) {
-        setReservedStays(prev => {
-          const merged = [...prev];
-          data.forEach(d => { if(!merged.find(p => p.id === d.id)) merged.push(d) });
-          return merged;
+        return isNameMatch || isHostMatch || (isDemoHost && isUnassigned);
+      })
+      .map(b => {
+        const cityVal = b.city || "";
+        const cityKey = cityVal.toLowerCase().trim();
+        const price =
+          b.homestayPrice ||
+          Number(localStorage.getItem(`homestayPrice_${cityKey}`)) ||
+          1500;
+        return { ...b, homestayPrice: price };
+      });
+
+    setReservedStays(plansWithStays);
+
+    // Fetch live backend metrics
+    fetch(`http://localhost:8080/api/bookings`, { credentials: "include" })
+      .then(res => res.json())
+      .then(data => {
+        if(data && Array.isArray(data)) {
+          const myBookings = data.filter(b => {
+            const nameMatch = b.homestayName && currentUser.fullName &&
+              (b.homestayName.toLowerCase().includes(currentUser.fullName.toLowerCase()) ||
+               currentUser.fullName.toLowerCase().includes(b.homestayName.toLowerCase()));
+            const idMatch = b.hostId && String(b.hostId) === String(currentUser.id);
+            return nameMatch || idMatch;
+          });
+          setReservedStays(prev => {
+            const merged = [...prev];
+            myBookings.forEach(d => {
+              const getUniqueKey = (item) => `${item.city}-${item.startDate}-${item.endDate}-${item.userEmail}`.toLowerCase().trim();
+              const newKey = getUniqueKey(d);
+              
+              const alreadyExists = merged.some(p => getUniqueKey(p) === newKey);
+              if (!alreadyExists) {
+                merged.push(d);
+              }
+            });
+            return merged;
+          });
+        }
+      })
+      .catch(() => {});
+
+    fetch("http://localhost:8080/api/homestays", { credentials: "include" })
+      .then(res => res.json())
+      .then(data => {
+        const backendStays = Array.isArray(data) ? data.filter(h => h.hostId === currentUser.id) : [];
+        
+        // 🔥 MERGE WITH LOCAL
+        const approved = JSON.parse(localStorage.getItem("homestays") || "[]");
+        const pending = JSON.parse(localStorage.getItem("pending_properties") || "[]");
+        const rejected = JSON.parse(localStorage.getItem("rejected_properties") || "[]");
+        const localUserStays = [...approved, ...pending, ...rejected].filter(p => String(p.hostId) === String(currentUser.id));
+
+        const merged = [...backendStays];
+        localUserStays.forEach(ls => {
+           if (!merged.find(m => m.id === ls.id)) merged.push(ls);
         });
-      }
-    })
-    .catch(err => console.error("No backend bookings: ", err));
 
-  fetch("http://localhost:8080/api/homestays")
-    .then(res => res.json())
-    .then(data => {
-      console.log("DATA:", data); // 🔍 check in console
-      const filtered = data.filter(h => h.hostId === user.id);
-      setMyStays(filtered);
-    })
-    .catch(err => console.error("No backend homestays: ", err));
-}, [user]);
+        setMyProperties(merged);
+      })
+      .catch(err => {
+        console.error("No backend homestays: ", err);
+        // Fallback to local only
+        const approved = JSON.parse(localStorage.getItem("homestays") || "[]");
+        const pending = JSON.parse(localStorage.getItem("pending_properties") || "[]");
+        const rejected = JSON.parse(localStorage.getItem("rejected_properties") || "[]");
+        setMyProperties([...approved, ...pending, ...rejected].filter(p => String(p.hostId) === String(currentUser.id)));
+      });
+  };
+
+  loadData();
+  window.addEventListener("storage", loadData);
+  return () => window.removeEventListener("storage", loadData);
+}, [navigate]);
 
   
   const [activeChat, setActiveChat] = useState(null);
@@ -139,19 +241,33 @@ useEffect(() => {
     navigate("/", { replace: true });
   };
 
-  const handleUpdateStatus = (tourId, newStatus) => {
-    const storedBookings = JSON.parse(localStorage.getItem("savedPlans")) || [];
-    const updatedBookings = storedBookings.map(b => b.id === tourId ? { ...b, homestayStatus: newStatus } : b);
-    localStorage.setItem("savedPlans", JSON.stringify(updatedBookings));
-    
-    setReservedStays(prev => prev.map(t => t.id === tourId ? { ...t, homestayStatus: newStatus } : t));
+  const handleUpdateStatus = (booking, newStatus) => {
+    const getUniqueKey = (item) => `${item.city}-${item.startDate}-${item.endDate}-${item.userEmail}`.toLowerCase().trim();
+    const targetKey = getUniqueKey(booking);
 
-    // Attempt backend sync
-    fetch(`http://localhost:8080/api/bookings/${tourId}/status`, {
-       method: "PUT",
-       headers: { "Content-Type": "application/json" },
-       body: JSON.stringify({ status: newStatus })
-    }).catch(err => console.error("API backend offline for save:", err));
+    const storedBookings = JSON.parse(localStorage.getItem("savedPlans")) || [];
+    const updatedBookings = storedBookings.map(b =>
+      getUniqueKey(b) === targetKey ? { ...b, homestayStatus: newStatus } : b
+    );
+    localStorage.setItem("savedPlans", JSON.stringify(updatedBookings));
+    setReservedStays(prev => prev.map(t =>
+      getUniqueKey(t) === targetKey ? { ...t, homestayStatus: newStatus } : t
+    ));
+
+    // Find real numeric DB id by fetching all bookings and matching
+    fetch("http://localhost:8080/api/bookings", { credentials: "include" })
+      .then(res => res.json())
+      .then(data => {
+        const match = data.find(b => getUniqueKey(b) === targetKey);
+        if (match && match.id) {
+          fetch(`http://localhost:8080/api/bookings/${match.id}/status`, {
+            method: "PUT",
+            credentials: "include",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ status: newStatus })
+          }).catch(() => {});
+        }
+      }).catch(() => {});
   };
 
   const [showAddPropertyModal, setShowAddPropertyModal] = useState(false);
@@ -159,63 +275,94 @@ useEffect(() => {
   const [newPropCity, setNewPropCity] = useState("");
   const [newPropPrice, setNewPropPrice] = useState("");
   const [newPropDesc, setNewPropDesc] = useState("");
+  const [newPropImage, setNewPropImage] = useState("");
 
   const handleAddProperty = async (e) => {
-  e.preventDefault();
+    e.preventDefault();
+    if (!newPropName || !newPropCity || !newPropPrice) return;
 
-  if (!newPropName || !newPropCity || !newPropPrice) return;
+    // Premium Diverse Default Images
+    const defaultImages = [
+      "https://images.unsplash.com/photo-1512917774080-9991f1c4c750?auto=format&fit=crop&q=80&w=2070", // Modern Villa
+      "https://images.unsplash.com/photo-1518780664697-55e3ad937233?auto=format&fit=crop&q=80&w=2000", // Traditional House
+      "https://images.unsplash.com/photo-1493663284031-b7e3aefcae8e?auto=format&fit=crop&q=80&w=2070", // Interior
+      "https://images.unsplash.com/photo-1502672260266-1c1ef2d93688?auto=format&fit=crop&q=80&w=2070", // Cozy Apartment
+      "https://images.unsplash.com/photo-1484154218962-a197022b5858?auto=format&fit=crop&q=80&w=2070", // Bright Living Room
+      "https://images.unsplash.com/photo-1522708323590-d24dbb6b0267?auto=format&fit=crop&q=80&w=2070", // City Penthouse
+      "https://images.unsplash.com/photo-1513584684374-8bdb7489feef?auto=format&fit=crop&q=80&w=2070", // Modern Exterior
+      "https://images.unsplash.com/photo-1449156001931-963421ce4dc2?auto=format&fit=crop&q=80&w=2070", // Wooden Cabin
+      "https://images.unsplash.com/photo-1501183638710-841dd1904471?auto=format&fit=crop&q=80&w=2070"  // Minimalist Home
+    ];
+    // Seed with property name for pseudo-random but consistent selection if blank
+    const seed = newPropName.length + newPropPrice;
+    const finalImage = newPropImage || defaultImages[seed % defaultImages.length];
 
-  // 🔥 ADD TO LOCALSTORAGE FOR SYNC / OFFLINE
-  const customStays = JSON.parse(localStorage.getItem("customHomestays")) || [];
-  const newStay = {
-    id: "hs_" + Date.now(),
-    name: newPropName,
-    title: newPropName,
-    city: newPropCity.toLowerCase().trim(),
-    price: Number(newPropPrice),
-    description: newPropDesc,
-    hostId: user.id,
-    hostEmail: user.email,
-    rating: 5.0,
-    approvalStatus: "pending"
+    const newStay = {
+      id: "hs_" + Date.now(),
+      title: newPropName,
+      name: newPropName,
+      city: newPropCity.trim(), // Name for display
+      citySlug: newPropCity.toLowerCase().replace(/\s+/g, '-').trim(), // Slug for linking
+      price: Number(newPropPrice),
+      description: newPropDesc,
+      image: finalImage,
+      hostId: user.id,
+      hostName: user.fullName,
+      hostEmail: user.email,
+      rating: 5.0,
+      status: "pending", // Primary status for admin
+      approvalStatus: "pending", // Backup status
+      createdAt: new Date().toISOString()
+    };
+
+    // 1. Save to backend DB first to get real ID
+    let dbId = null;
+    try {
+      const res = await fetch("http://localhost:8080/api/homestays", {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          title: newPropName,
+          city: newPropCity.toLowerCase().trim(),
+          price: Number(newPropPrice),
+          description: newPropDesc,
+          image: finalImage,
+          hostId: user.id,
+          status: "PENDING"
+        })
+      });
+      if (res.ok) {
+        const saved = await res.json();
+        dbId = saved.id;
+      }
+    } catch { /* backend offline */ }
+
+    // Use DB id if available, else local id
+    if (dbId) newStay.id = dbId;
+
+    // 2. Save to PENDING queue for Admin
+    const pending = JSON.parse(localStorage.getItem("pending_properties") || "[]");
+    pending.push(newStay);
+    localStorage.setItem("pending_properties", JSON.stringify(pending));
+    
+    // 3. Also keep in host's local list for tracking
+    const myStaysLocal = JSON.parse(localStorage.getItem(`host_stays_${user.id}`) || "[]");
+    myStaysLocal.push(newStay);
+    localStorage.setItem(`host_stays_${user.id}`, JSON.stringify(myStaysLocal));
+
+    alert("Listing submitted! It will appear once the Admin approves it.");
+    
+    setShowAddPropertyModal(false);
+    setNewPropName("");
+    setNewPropCity("");
+    setNewPropPrice("");
+    setNewPropDesc("");
+    setNewPropImage("");
+    
+    // Refresh local list
+    setMyProperties(myStaysLocal);
   };
-
-  customStays.push(newStay);
-  localStorage.setItem("customHomestays", JSON.stringify(customStays));
-  
-  // Update UI immediately
-  setMyStays(prev => [...prev, newStay]);
-  alert("Property submitted! Waiting for admin approval.");
-  
-  setShowAddPropertyModal(false);
-  setNewPropName("");
-  setNewPropCity("");
-  setNewPropPrice("");
-  setNewPropDesc("");
-
-  try {
-    const res = await fetch("http://localhost:8080/api/homestays", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        title: newPropName,
-        city: newPropCity,
-        price: Number(newPropPrice),
-        description: newPropDesc,
-        image: "default.jpg",
-        hostId: user.id, // 🔥 IMPORTANT
-      }),
-    });
-
-    if (!res.ok) {
-      console.warn("API save returned non-ok");
-    }
-  } catch (err) {
-    console.error("Backend offline, but property saved locally", err);
-  }
-};
 
 if (!user) {
   return (
@@ -336,17 +483,15 @@ if (!user) {
         })()}
 
         {/* MY PROPERTIES TAB */}
-      {activeTab === "My Properties" && (
-  <div className="bg-white/80 p-8 rounded-xl">
-    
-    <h3 className="text-2xl font-semibold mb-6">My Properties</h3>
+        {activeTab === "My Properties" && (
+          <div className="bg-white/80 p-8 rounded-xl shadow-sm border border-gray-200/60 min-h-[60vh]">
+            <h3 className="text-2xl font-semibold mb-6">My Properties</h3>
 
-    {myStays.length === 0 ? (
-      <p className="text-gray-500">No properties listed yet</p>
-    ) : (
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-        
-        {myStays.map((t, idx) => (
+            {myProperties.length === 0 ? (
+              <p className="text-gray-500">No properties listed yet</p>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                {myProperties.map((t, idx) => (
           <div
             key={idx}
             className="p-5 border border-gray-200 rounded-xl bg-white/60 shadow hover:shadow-lg transition"
@@ -363,9 +508,11 @@ if (!user) {
               <p className="text-green-600 font-bold">₹{t.price}</p>
 
               <span
-                className={`text-xs px-2 py-1 rounded ${
-                  t.status === "APPROVED"
+                className={`text-xs px-2 py-1 rounded font-bold uppercase ${
+                  (t.status || "").toLowerCase() === "approved"
                     ? "bg-green-100 text-green-700"
+                    : (t.status || "").toLowerCase() === "rejected"
+                    ? "bg-red-100 text-red-700"
                     : "bg-yellow-100 text-yellow-700"
                 }`}
               >
@@ -412,10 +559,10 @@ if (!user) {
                       
                       {(!t.homestayStatus || t.homestayStatus === "pending") && (
                         <>
-                          <button onClick={() => handleUpdateStatus(t.id, "confirmed")} className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 text-sm font-medium transition w-full md:w-auto">
+                          <button onClick={() => handleUpdateStatus(t, "confirmed")} className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 text-sm font-medium transition w-full md:w-auto">
                             Accept
                           </button>
-                          <button onClick={() => handleUpdateStatus(t.id, "rejected")} className="px-4 py-2 bg-red-100 text-red-700 rounded-lg hover:bg-red-200 text-sm font-medium transition w-full md:w-auto">
+                          <button onClick={() => handleUpdateStatus(t, "rejected")} className="px-4 py-2 bg-red-100 text-red-700 rounded-lg hover:bg-red-200 text-sm font-medium transition w-full md:w-auto">
                             Decline
                           </button>
                         </>
@@ -582,7 +729,23 @@ if (!user) {
                   <div className="grid grid-cols-2 gap-4">
                     <div>
                        <label className="block text-sm font-medium text-gray-700 mb-1">City *</label>
-                       <input type="text" value={newPropCity} onChange={(e) => setNewPropCity(e.target.value)} required className="w-full border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500 focus:outline-none" placeholder="e.g., Pune" />
+                       <select 
+                         value={newPropCity} 
+                         onChange={(e) => setNewPropCity(e.target.value)} 
+                         required 
+                         className="w-full border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500 focus:outline-none bg-white"
+                       >
+                         <option value="">Select a City</option>
+                         {(() => {
+                           const hardcoded = Object.values(citiesByState).flat();
+                           const localAdmin = JSON.parse(localStorage.getItem("admin_cities") || "{}");
+                           const localList = Object.values(localAdmin).flat();
+                           const allCities = [...hardcoded, ...localList.filter(lc => !hardcoded.find(h => h.slug === lc.slug))];
+                           return allCities.sort((a,b) => a.name.localeCompare(b.name)).map(city => (
+                             <option key={city.slug} value={city.name}>{city.name}</option>
+                           ));
+                         })()}
+                       </select>
                     </div>
                     <div>
                        <label className="block text-sm font-medium text-gray-700 mb-1">Price per Night (₹) *</label>
@@ -591,7 +754,12 @@ if (!user) {
                   </div>
                   <div>
                      <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
-                     <textarea value={newPropDesc} onChange={(e) => setNewPropDesc(e.target.value)} rows="3" className="w-full border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500 focus:outline-none" placeholder="Describe the ambiance, location, and amenities..."></textarea>
+                     <textarea value={newPropDesc} onChange={(e) => setNewPropDesc(e.target.value)} rows="2" className="w-full border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500 focus:outline-none" placeholder="Ambiance, location..."></textarea>
+                  </div>
+                  <div>
+                     <label className="block text-sm font-medium text-gray-700 mb-1">Image URL (Optional)</label>
+                     <input type="url" value={newPropImage} onChange={(e) => setNewPropImage(e.target.value)} className="w-full border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500 focus:outline-none" placeholder="https://images.unsplash.com/..." />
+                     <p className="text-[10px] text-gray-400 mt-1">Leave blank for a random professional photo.</p>
                   </div>
                </div>
                

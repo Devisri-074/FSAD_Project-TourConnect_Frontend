@@ -34,7 +34,8 @@ function ForgotPassword() {
     
     try {
         const res = await fetch(`/api/auth/send-otp?email=${encodeURIComponent(email)}`, { 
-          method: "GET" 
+          method: "GET",
+          credentials: "include"
         });
 
         const data = await res.text();
@@ -63,7 +64,8 @@ function ForgotPassword() {
 
     try {
         const res = await fetch(`/api/auth/verify-otp?email=${encodeURIComponent(email)}&otp=${encodeURIComponent(otp)}`, { 
-          method: "POST" 
+          method: "POST",
+          credentials: "include"
         });
         const text = await res.text();
         
@@ -102,6 +104,7 @@ function ForgotPassword() {
         `/api/auth/reset-password?email=${encodeURIComponent(targetEmail)}&newPassword=${encodeURIComponent(newPassword)}`,
         {
           method: "POST",
+          credentials: "include"
         }
       );
 

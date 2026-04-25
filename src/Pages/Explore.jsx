@@ -9,13 +9,42 @@ function Explore() {
   const navigate = useNavigate();
 
 
-  const allCities = Object.entries(citiesByState).flatMap(
+  const [availableCities, setAvailableCities] = useState(() => {
+    return JSON.parse(localStorage.getItem("availableCities")) || [];
+  });
+
+  const hardcodedCities = Object.entries(citiesByState).flatMap(
     ([stateSlug, cities]) =>
       cities.map((city) => ({
         ...city,
         stateSlug,
       }))
   );
+
+  // ✅ MERGE & FILTER ADMIN CITIES (Structured)
+  const localAdminData = JSON.parse(localStorage.getItem("admin_cities") || "{}");
+  const blacklisted = JSON.parse(localStorage.getItem("blacklisted_cities") || "[]");
+
+  const localCitiesList = Object.entries(localAdminData).flatMap(([stateSlug, cities]) => 
+    cities.map(city => ({
+      ...city,
+      stateSlug,
+      image: city.image || "https://images.unsplash.com/photo-1464822759023-fed622ff2c3b?auto=format&fit=crop&q=80&w=2070",
+      attractions: city.attractions || 0,
+      homestays: city.homestays || 0
+    }))
+  );
+
+  // Merge: local overwrites hardcoded
+  const merged = hardcodedCities.map(h => {
+    const localVersion = localCitiesList.find(l => l.slug === h.slug);
+    return localVersion || h;
+  });
+
+  // Add truly new local cities
+  const trulyNewLocal = localCitiesList.filter(l => !hardcodedCities.find(hc => hc.slug === l.slug));
+
+  const allCities = [...merged, ...trulyNewLocal].filter(c => !blacklisted.includes(c.slug));
 
   const filteredCities = allCities.filter(
     (city) =>
