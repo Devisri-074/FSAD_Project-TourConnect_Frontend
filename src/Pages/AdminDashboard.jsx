@@ -12,7 +12,7 @@ function AdminDashboard() {
   const navigate = useNavigate();
 
   console.log("🚀 TOURCONNECT ADMIN V3.0 LOADED");
-  
+
   const [user, setUser] = useState(null);
   const [allUsers, setAllUsers] = useState([]);
   const [searchQuery, setSearchQuery] = useState("");
@@ -85,7 +85,7 @@ function AdminDashboard() {
 
   const handleDeleteCity = (citySlug) => {
     if (!window.confirm("Are you sure you want to delete this city and all its attractions?")) return;
-    
+
     // 1. Remove from admin_cities (if it's there)
     const local = JSON.parse(localStorage.getItem("admin_cities") || "{}");
     for (const state in local) {
@@ -116,7 +116,7 @@ function AdminDashboard() {
 
   const handleDeleteAttraction = (citySlug, attrName) => {
     if (!window.confirm(`Delete ${attrName}?`)) return;
-    
+
     // 1. Remove from local storage if present
     const local = JSON.parse(localStorage.getItem("admin_attractions") || "{}");
     if (local[citySlug]) {
@@ -150,7 +150,7 @@ function AdminDashboard() {
     };
 
     const local = JSON.parse(localStorage.getItem("admin_attractions") || "{}");
-    
+
     // If editing OR overwriting hardcoded, clear any blacklist for this specific key
     const blacklist = JSON.parse(localStorage.getItem("blacklisted_attractions") || "[]");
     const key = `${newAttraction.citySlug}|${newAttraction.name}`;
@@ -188,9 +188,9 @@ function AdminDashboard() {
       setUser(storedUser);
 
       // ✅ Sync with Local Storage for offline/demo data
-      const pending = (JSON.parse(localStorage.getItem("pending_properties") || "[]")).map(p => ({...p, _sourceKey: "pending_properties"}));
-      const live = (JSON.parse(localStorage.getItem("homestays") || "[]")).map(p => ({...p, _sourceKey: "homestays"}));
-      
+      const pending = (JSON.parse(localStorage.getItem("pending_properties") || "[]")).map(p => ({ ...p, _sourceKey: "pending_properties" }));
+      const live = (JSON.parse(localStorage.getItem("homestays") || "[]")).map(p => ({ ...p, _sourceKey: "homestays" }));
+
       const allHostStays = [];
       for (let i = 0; i < localStorage.length; i++) {
         const key = localStorage.key(i);
@@ -198,14 +198,14 @@ function AdminDashboard() {
           try {
             const data = JSON.parse(localStorage.getItem(key));
             if (Array.isArray(data)) {
-               data.forEach(item => {
-                  // If it's a homestay submission
-                  if (item.id && (item.name || item.title)) {
-                    allHostStays.push({...item, _sourceKey: key});
-                  }
-               });
+              data.forEach(item => {
+                // If it's a homestay submission
+                if (item.id && (item.name || item.title)) {
+                  allHostStays.push({ ...item, _sourceKey: key });
+                }
+              });
             }
-          } catch(e) { }
+          } catch (e) { }
         }
       }
       setPropertyRequests([...pending, ...live, ...allHostStays]);
@@ -311,7 +311,7 @@ function AdminDashboard() {
         });
         const propData = propertyRes.data?.data ?? propertyRes.data;
         const backendProps = Array.isArray(propData) ? propData : [];
-        
+
         // 🔥 SYNC WITH OUR NEW STORAGE KEYS
         const pendingProps = JSON.parse(localStorage.getItem("pending_properties") || "[]");
         const liveProps = JSON.parse(localStorage.getItem("homestays") || "[]");
@@ -335,18 +335,18 @@ function AdminDashboard() {
       // Full fallback
       const localUsers = JSON.parse(localStorage.getItem("users")) || [];
       setAllUsers(localUsers.map(u => ({ ...u, name: u.name || u.fullName })));
-      
+
       const localPlans = JSON.parse(localStorage.getItem("savedPlans")) || [];
       setAllPlans(localPlans.map(lp => ({ ...lp, status: computeOverallStatus(lp) })));
-      
+
       // ✅ DEEP SCAN: Find properties even from old/different keys
       const allPending = [];
       const allLive = JSON.parse(localStorage.getItem("homestays") || "[]");
-      
+
       // Check the standard pending list
       const standardPending = JSON.parse(localStorage.getItem("pending_properties") || "[]");
       allPending.push(...standardPending);
-      
+
       // Aggressive scan for host-specific lists (migration/repair)
       for (let i = 0; i < localStorage.length; i++) {
         const key = localStorage.key(i);
@@ -361,17 +361,21 @@ function AdminDashboard() {
           });
         }
       }
-      
+
       setPropertyRequests([...allPending, ...allLive]);
     }
   };
 
   useEffect(() => {
     fetchAdminData();
+    const interval = setInterval(fetchAdminData, 30000);
+
+    // 🔥 REAL-TIME WATCHER
     const handleSync = () => fetchAdminData();
     window.addEventListener("storage", handleSync);
 
     return () => {
+      clearInterval(interval);
       window.removeEventListener("storage", handleSync);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -426,96 +430,40 @@ function AdminDashboard() {
   const handleUpdatePropertyStatusV2 = (id, newStatus) => {
     if (!window.confirm(`Are you sure you want to ${newStatus} this property?`)) return;
 
+    // 1. Find the property in our state
     const property = propertyRequests.find(p => String(p.id) === String(id));
-    if (!property) { alert("Property not found."); return; }
-
-    // Remove from pending_properties
-    const pendingList = JSON.parse(localStorage.getItem("pending_properties") || "[]");
-    localStorage.setItem("pending_properties", JSON.stringify(pendingList.filter(item => String(item.id) !== String(id))));
-
-    // Also remove from host_stays source if applicable
-    const sourceKey = property._sourceKey || "pending_properties";
-    if (sourceKey !== "pending_properties") {
-      const sourceList = JSON.parse(localStorage.getItem(sourceKey) || "[]");
-      localStorage.setItem(sourceKey, JSON.stringify(sourceList.filter(item => String(item.id) !== String(id))));
+    if (!property || !property._sourceKey) {
+      alert("Error: Source folder not identified. Try refreshing the page.");
+      return;
     }
 
-    const approvedProp = {
-      ...property,
-      name: property.name || property.title,
-      title: property.name || property.title,
-      city: (property.citySlug || property.city || "").toLowerCase().trim(),
-      status: newStatus === "APPROVED" ? "approved" : "rejected",
-      approvalStatus: newStatus === "APPROVED" ? "approved" : "rejected",
-      isLive: newStatus === "APPROVED"
-    };
+    const sourceKey = property._sourceKey;
+    const sourceList = JSON.parse(localStorage.getItem(sourceKey) || "[]");
+    const foundInSource = sourceList.find(item => String(item.id) === String(id));
 
-    if (newStatus === "APPROVED") {
-      // Save to homestays (Live Managed Properties source)
+    if (!foundInSource) {
+      alert("Property already processed or folder changed.");
+      window.location.reload();
+      return;
+    }
+
+    // 2. Remove from source
+    localStorage.setItem(sourceKey, JSON.stringify(sourceList.filter(item => String(item.id) !== String(id))));
+
+    // 3. Move to target
+    if (newStatus === 'APPROVED') {
       const live = JSON.parse(localStorage.getItem("homestays") || "[]");
-      localStorage.setItem("homestays", JSON.stringify([...live.filter(i => String(i.id) !== String(id)), approvedProp]));
-
-      // Save to customHomestays (Homestay.jsx city listing source)
-      const custom = JSON.parse(localStorage.getItem("customHomestays") || "[]");
-      localStorage.setItem("customHomestays", JSON.stringify([...custom.filter(i => String(i.id) !== String(id)), approvedProp]));
-
-      // Update host tracking
-      if (property.hostId) {
-        const hostKey = `host_stays_${property.hostId}`;
-        const hostStays = JSON.parse(localStorage.getItem(hostKey) || "[]");
-        localStorage.setItem(hostKey, JSON.stringify(hostStays.map(s => String(s.id) === String(id) ? { ...s, status: "approved", approvalStatus: "approved" } : s)));
-      }
-
-      // Sync to backend DB
-      const isNumericId = !isNaN(Number(id));
-      if (isNumericId) {
-        // Already in DB, just update status
-        fetch(`http://localhost:8080/api/homestays/${id}/status`, {
-          method: "PUT",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ status: "APPROVED" })
-        }).catch(() => {});
-      } else {
-        // Not in DB yet, insert it
-        fetch("http://localhost:8080/api/homestays", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            title: approvedProp.name || approvedProp.title,
-            city: approvedProp.city,
-            price: Number(approvedProp.price) || 0,
-            description: approvedProp.description || "",
-            image: approvedProp.image || "",
-            hostId: approvedProp.hostId ? Number(approvedProp.hostId) : null,
-            hostName: approvedProp.hostName || "",
-            status: "APPROVED"
-          })
-        }).catch(() => {});
-      }
-
-      alert(`"${approvedProp.name}" approved and is now live in ${approvedProp.city}!`);
+      live.push({ ...foundInSource, status: "approved", approvalStatus: "approved", isLive: true });
+      localStorage.setItem("homestays", JSON.stringify(live));
+      alert("Success! Approved and Live on City page.");
     } else {
       const rejected = JSON.parse(localStorage.getItem("rejected_properties") || "[]");
-      localStorage.setItem("rejected_properties", JSON.stringify([...rejected.filter(i => String(i.id) !== String(id)), approvedProp]));
-
-      fetch(`http://localhost:8080/api/homestays/${id}/status`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ status: "REJECTED" })
-      }).catch(() => {});
-
-      alert(`"${approvedProp.name}" has been rejected.`);
+      rejected.push({ ...foundInSource, status: "rejected", approvalStatus: "rejected" });
+      localStorage.setItem("rejected_properties", JSON.stringify(rejected));
+      alert("Property Rejected.");
     }
 
-    // Update state immediately — no reload needed
-    const newLive = JSON.parse(localStorage.getItem("homestays") || "[]");
-    const newPending = JSON.parse(localStorage.getItem("pending_properties") || "[]");
-    setPropertyRequests([
-      ...newPending.map(p => ({ ...p, _sourceKey: "pending_properties" })),
-      ...newLive.map(p => ({ ...p, _sourceKey: "homestays" }))
-    ]);
-
-    window.dispatchEvent(new Event("storage"));
+    window.location.reload();
   };
 
   const handleLogout = () => {
@@ -561,6 +509,7 @@ function AdminDashboard() {
           <SidebarItem icon={<ArrowLeft size={18} />} label="Back to Home" onClick={() => navigate("/")} />
           <SidebarItem icon={<LogOut size={18} />} label="Sign Out" onClick={handleLogout} isDanger />
         </div>
+
       </aside>
 
       {/* MAIN CONTENT */}
@@ -812,8 +761,8 @@ function AdminDashboard() {
         {/* PROPERTY REQUESTS TAB */}
         {activeTab === "Property Requests" && (() => {
           const pendingRequests = propertyRequests.filter(p => {
-             const s = (p.status || p.approvalStatus || "pending").toLowerCase();
-             return s === "pending";
+            const s = (p.status || p.approvalStatus || "pending").toLowerCase();
+            return s === "pending";
           });
           return (
             <div className="bg-white/80 backdrop-blur-md p-8 rounded-xl border border-gray-200/60 shadow-sm min-h-[60vh]">
@@ -855,8 +804,8 @@ function AdminDashboard() {
         {/* ACTIVE PROPERTIES TAB */}
         {activeTab === "Active Properties" && (() => {
           const liveProperties = propertyRequests.filter(p => {
-             const s = (p.status || p.approvalStatus || "").toLowerCase();
-             return s === "approved";
+            const s = (p.status || p.approvalStatus || "").toLowerCase();
+            return s === "approved";
           });
           return (
             <div className="bg-white/80 backdrop-blur-md p-8 rounded-xl border border-gray-200/60 shadow-sm min-h-[60vh]">
@@ -1005,9 +954,9 @@ function AdminDashboard() {
                 <h4 className="text-lg font-bold text-gray-800">Present Cities</h4>
                 <div className="relative w-full md:w-64">
                   <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-                  <input 
-                    type="text" 
-                    placeholder="Search cities..." 
+                  <input
+                    type="text"
+                    placeholder="Search cities..."
                     value={citySearch}
                     onChange={(e) => setCitySearch(e.target.value)}
                     className="w-full pl-10 pr-4 py-2 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20"
@@ -1016,64 +965,64 @@ function AdminDashboard() {
               </div>
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                 {(() => {
-                   const hardcoded = Object.values(citiesByState).flat();
-                   const localAdmin = JSON.parse(localStorage.getItem("admin_cities") || "{}");
-                   const localList = Object.values(localAdmin).flat();
-                   const blacklisted = JSON.parse(localStorage.getItem("blacklisted_cities") || "[]");
-                   
-                   const merged = hardcoded.map(h => {
-                     const localVersion = localList.find(l => l.slug === h.slug);
-                     return localVersion || h;
-                   });
-                   
-                   const trulyNewLocal = localList.filter(l => !hardcoded.find(hc => hc.slug === l.slug));
-                   
-                   const allDisplay = [...merged, ...trulyNewLocal]
+                  const hardcoded = Object.values(citiesByState).flat();
+                  const localAdmin = JSON.parse(localStorage.getItem("admin_cities") || "{}");
+                  const localList = Object.values(localAdmin).flat();
+                  const blacklisted = JSON.parse(localStorage.getItem("blacklisted_cities") || "[]");
+
+                  const merged = hardcoded.map(h => {
+                    const localVersion = localList.find(l => l.slug === h.slug);
+                    return localVersion || h;
+                  });
+
+                  const trulyNewLocal = localList.filter(l => !hardcoded.find(hc => hc.slug === l.slug));
+
+                  const allDisplay = [...merged, ...trulyNewLocal]
                     .filter(c => !blacklisted.includes(c.slug))
                     .filter(c => c.name.toLowerCase().includes(citySearch.toLowerCase()));
-                   
-                   if (allDisplay.length === 0) return <p className="text-sm text-gray-400 italic col-span-full py-4 text-center">No cities found matching your search.</p>;
-                   
-                   return allDisplay.map((city, idx) => {
-                     const hardcodedAttrs = attractionsByCity[city.slug] || [];
-                     const adminAttrs = (JSON.parse(localStorage.getItem("admin_attractions") || "{}"))[city.slug] || [];
-                     const totalAttractions = [...hardcodedAttrs, ...adminAttrs].length;
 
-                     return (
-                       <div key={`${city.slug}-${idx}`} className="p-3 border border-gray-100 rounded-lg bg-gray-50 flex items-center justify-between shadow-sm">
-                         <div>
-                           <p className="font-semibold text-gray-900 text-sm">{city.name}</p>
-                           <p className="text-xs text-gray-500 font-medium">
-                             {totalAttractions} Attractions
-                           </p>
-                         </div>
-                         <div className="flex gap-1">
-                           <button 
-                             onClick={() => {
-                               setEditingCitySlug(city.slug);
-                               setNewCity({
-                                 name: city.name,
-                                 stateName: city.stateName,
-                                 image: city.image.includes("unsplash") && city.image.includes("464822759023") ? "" : city.image,
-                                 knownFor: city.knownFor
-                               });
-                               window.scrollTo({ top: 0, behavior: 'smooth' });
-                             }}
-                             className="p-1.5 text-blue-500 hover:bg-blue-50 rounded-lg transition"
-                             title="Edit City"
-                           >
-                             <Edit size={16} />
-                           </button>
-                           <button 
-                             onClick={() => handleDeleteCity(city.slug)}
-                             className="p-1.5 text-red-500 hover:bg-red-50 rounded-lg transition"
-                             title="Delete City"
-                           >
-                             <LogOut size={16} className="rotate-90" />
-                           </button>
-                         </div>
-                       </div>
-                     );
+                  if (allDisplay.length === 0) return <p className="text-sm text-gray-400 italic col-span-full py-4 text-center">No cities found matching your search.</p>;
+
+                  return allDisplay.map((city, idx) => {
+                    const hardcodedAttrs = attractionsByCity[city.slug] || [];
+                    const adminAttrs = (JSON.parse(localStorage.getItem("admin_attractions") || "{}"))[city.slug] || [];
+                    const totalAttractions = [...hardcodedAttrs, ...adminAttrs].length;
+
+                    return (
+                      <div key={`${city.slug}-${idx}`} className="p-3 border border-gray-100 rounded-lg bg-gray-50 flex items-center justify-between shadow-sm">
+                        <div>
+                          <p className="font-semibold text-gray-900 text-sm">{city.name}</p>
+                          <p className="text-xs text-gray-500 font-medium">
+                            {totalAttractions} Attractions
+                          </p>
+                        </div>
+                        <div className="flex gap-1">
+                          <button
+                            onClick={() => {
+                              setEditingCitySlug(city.slug);
+                              setNewCity({
+                                name: city.name,
+                                stateName: city.stateName,
+                                image: city.image.includes("unsplash") && city.image.includes("464822759023") ? "" : city.image,
+                                knownFor: city.knownFor
+                              });
+                              window.scrollTo({ top: 0, behavior: 'smooth' });
+                            }}
+                            className="p-1.5 text-blue-500 hover:bg-blue-50 rounded-lg transition"
+                            title="Edit City"
+                          >
+                            <Edit size={16} />
+                          </button>
+                          <button
+                            onClick={() => handleDeleteCity(city.slug)}
+                            className="p-1.5 text-red-500 hover:bg-red-50 rounded-lg transition"
+                            title="Delete City"
+                          >
+                            <LogOut size={16} className="rotate-90" />
+                          </button>
+                        </div>
+                      </div>
+                    );
                   });
                 })()}
               </div>
@@ -1084,9 +1033,9 @@ function AdminDashboard() {
                 <h4 className="text-lg font-bold text-gray-800 flex items-center gap-2"><Settings size={20} className="text-gray-500" /> Manage All Attractions</h4>
                 <div className="relative w-full md:w-64">
                   <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-                  <input 
-                    type="text" 
-                    placeholder="Search attractions..." 
+                  <input
+                    type="text"
+                    placeholder="Search attractions..."
                     value={attrSearch}
                     onChange={(e) => setAttrSearch(e.target.value)}
                     className="w-full pl-10 pr-4 py-2 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
@@ -1095,40 +1044,40 @@ function AdminDashboard() {
               </div>
               <div className="space-y-3">
                 {(() => {
-                   const localAttractions = JSON.parse(localStorage.getItem("admin_attractions") || "{}");
-                   const blacklisted = JSON.parse(localStorage.getItem("blacklisted_attractions") || "[]");
-                   const allRows = [];
-                   
-                   const hardcodedCities = Object.values(citiesByState).flat();
-                   const localCities = Object.values(JSON.parse(localStorage.getItem("admin_cities") || "{}")).flat();
-                   const allCitySlugs = [...new Set([...hardcodedCities.map(c => c.slug), ...localCities.map(c => c.slug)])];
-                   
-                   allCitySlugs.forEach(citySlug => {
-                     const hardcoded = attractionsByCity[citySlug] || [];
-                     const local = localAttractions[citySlug] || [];
-                     
-                     const merged = hardcoded.map(h => {
-                       const localVersion = local.find(l => l.name === h.name);
-                       return localVersion || h;
-                     });
-                     const trulyNewLocal = local.filter(l => !hardcoded.find(hc => hc.name === l.name));
-                     
-                     [...merged, ...trulyNewLocal].forEach(attr => {
-                        const key = `${citySlug}|${attr.name}`;
-                        if (!blacklisted.includes(key)) {
-                          allRows.push({ citySlug, ...attr });
-                        }
-                     });
-                   });
-                   
-                   const filteredRows = allRows.filter(row => 
-                      row.name.toLowerCase().includes(attrSearch.toLowerCase()) || 
-                      row.citySlug.toLowerCase().includes(attrSearch.toLowerCase())
-                   );
-                   
-                   if (filteredRows.length === 0) return <p className="text-sm text-gray-400 italic py-4 text-center">No attractions found matching your search.</p>;
-                   
-                   return filteredRows.map((attr, idx) => (
+                  const localAttractions = JSON.parse(localStorage.getItem("admin_attractions") || "{}");
+                  const blacklisted = JSON.parse(localStorage.getItem("blacklisted_attractions") || "[]");
+                  const allRows = [];
+
+                  const hardcodedCities = Object.values(citiesByState).flat();
+                  const localCities = Object.values(JSON.parse(localStorage.getItem("admin_cities") || "{}")).flat();
+                  const allCitySlugs = [...new Set([...hardcodedCities.map(c => c.slug), ...localCities.map(c => c.slug)])];
+
+                  allCitySlugs.forEach(citySlug => {
+                    const hardcoded = attractionsByCity[citySlug] || [];
+                    const local = localAttractions[citySlug] || [];
+
+                    const merged = hardcoded.map(h => {
+                      const localVersion = local.find(l => l.name === h.name);
+                      return localVersion || h;
+                    });
+                    const trulyNewLocal = local.filter(l => !hardcoded.find(hc => hc.name === l.name));
+
+                    [...merged, ...trulyNewLocal].forEach(attr => {
+                      const key = `${citySlug}|${attr.name}`;
+                      if (!blacklisted.includes(key)) {
+                        allRows.push({ citySlug, ...attr });
+                      }
+                    });
+                  });
+
+                  const filteredRows = allRows.filter(row =>
+                    row.name.toLowerCase().includes(attrSearch.toLowerCase()) ||
+                    row.citySlug.toLowerCase().includes(attrSearch.toLowerCase())
+                  );
+
+                  if (filteredRows.length === 0) return <p className="text-sm text-gray-400 italic py-4 text-center">No attractions found matching your search.</p>;
+
+                  return filteredRows.map((attr, idx) => (
                     <div key={idx} className="flex items-center justify-between p-4 bg-white border border-gray-200 rounded-xl shadow-sm">
                       <div>
                         <p className="font-bold text-gray-900">{attr.name}</p>
