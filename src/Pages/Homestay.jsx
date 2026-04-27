@@ -12,7 +12,13 @@ function Homestay() {
 
   const [customHomestays, setCustomHomestays] = useState(() => {
     try {
-      return JSON.parse(localStorage.getItem("customHomestays")) || [];
+      const custom = JSON.parse(localStorage.getItem("customHomestays")) || [];
+      const live = JSON.parse(localStorage.getItem("homestays")) || [];
+      
+      // Merge unique properties by ID
+      const combined = [...custom, ...live];
+      const unique = combined.filter((v, i, a) => a.findIndex(t => String(t.id) === String(v.id)) === i);
+      return unique;
     } catch {
       return [];
     }
@@ -21,7 +27,11 @@ function Homestay() {
   useEffect(() => {
     const handleStorage = () => {
       try {
-        setCustomHomestays(JSON.parse(localStorage.getItem("customHomestays")) || []);
+        const custom = JSON.parse(localStorage.getItem("customHomestays")) || [];
+        const live = JSON.parse(localStorage.getItem("homestays")) || [];
+        const combined = [...custom, ...live];
+        const unique = combined.filter((v, i, a) => a.findIndex(t => String(t.id) === String(v.id)) === i);
+        setCustomHomestays(unique);
       } catch {
         setCustomHomestays([]);
       }
@@ -32,8 +42,12 @@ function Homestay() {
 
   const safeCity = city ? city.toLowerCase().trim() : "";
   const cityCustomHomestays = customHomestays.filter(s => {
-      if (!s || !s.city) return false;
-      return s.approvalStatus === "approved" && (s.city.includes(safeCity) || safeCity.includes(s.city));
+      if (!s) return false;
+      const sCity = (s.city || "").toLowerCase().trim();
+      const sSlug = (s.citySlug || "").toLowerCase().trim();
+      
+      return (s.approvalStatus === "approved" || s.status === "approved") && 
+             (sCity.includes(safeCity) || safeCity.includes(sCity) || sSlug === safeCity);
   });
   const homestays = [...(homestaysByCity[safeCity] || []), ...cityCustomHomestays];
 

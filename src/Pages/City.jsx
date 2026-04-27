@@ -28,18 +28,16 @@ function City() {
     const blacklisted = JSON.parse(localStorage.getItem("blacklisted_cities") || "[]");
     if (blacklisted.includes(slug)) return null;
 
-    const localAdminData = JSON.parse(localStorage.getItem("admin_cities") || "{}");
+    const localAdminData = JSON.parse(localStorage.getItem("availableCities") || "[]");
     
     // 1. Check Local Override first
-    for (const state in localAdminData) {
-      const city = localAdminData[state].find(c => c.slug === slug);
-      if (city) {
-        return {
-          ...city,
-          stateName: city.stateName || "Newly Added District",
-          image: city.image || "https://images.unsplash.com/photo-1464822759023-fed622ff2c3b?auto=format&fit=crop&q=80&w=2070"
-        };
-      }
+    const city = localAdminData.find(c => c.slug === slug);
+    if (city) {
+      return {
+        ...city,
+        stateName: city.state || "Newly Added District",
+        image: city.image || "https://images.unsplash.com/photo-1464822759023-fed622ff2c3b?auto=format&fit=crop&q=80&w=2070"
+      };
     }
 
     // 2. Check Hardcoded
@@ -55,7 +53,22 @@ function City() {
   
   // ✅ MERGE ATTRACTIONS
   const hardcodedAttractions = attractionsByCity[slug] || [];
-  const adminAttractions = (JSON.parse(localStorage.getItem("admin_attractions")) || {})[slug] || [];
+  
+  const adminAttractions = (() => {
+    try {
+      const a1 = JSON.parse(localStorage.getItem("admin_attractions")) || {};
+      const a2 = JSON.parse(localStorage.getItem("customAttractions")) || {};
+      
+      // Combine from both sources
+      const combined = (a1[slug] || []).concat(a2[slug] || []);
+      
+      // Unique by name
+      return combined.filter((v, i, a) => a.findIndex(t => t.name === v.name) === i);
+    } catch {
+      return [];
+    }
+  })();
+
   const blacklistedAttrs = JSON.parse(localStorage.getItem("blacklisted_attractions") || "[]");
 
   // Merge: admin local overwrites hardcoded with same name
@@ -72,6 +85,8 @@ function City() {
     const key = `${slug}|${attr.name}`;
     return !blacklistedAttrs.includes(key);
   });
+
+
 
   const selectAll = () => {
     setSelectedPlaces(attractionDetails);
@@ -241,44 +256,7 @@ function City() {
           )}
         </div>
 
-        {/* ✅ HOMESTAYS SECTION */}
-        <div className="mt-16">
-          <h2 className="text-2xl font-bold mb-8 flex items-center gap-2">
-            🏡 Recommended Homestays in {city?.name}
-          </h2>
-          {(() => {
-            const allHomestays = JSON.parse(localStorage.getItem("homestays") || "[]");
-            const cityHomestays = allHomestays.filter(h => h.citySlug === slug || h.city?.toLowerCase() === city?.name?.toLowerCase());
 
-            if (cityHomestays.length === 0) {
-              return (
-                <div className="p-8 bg-gray-50 rounded-xl border border-dashed border-gray-300 text-center text-gray-500">
-                   No approved homestays found for this city yet.
-                </div>
-              );
-            }
-
-            return (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {cityHomestays.map((h, idx) => (
-                  <div key={idx} className="bg-white rounded-xl shadow-md border border-gray-100 overflow-hidden hover:shadow-lg transition">
-                    <div className="h-40 overflow-hidden bg-gray-200">
-                       <img src={h.image} alt={h.title} className="w-full h-full object-cover" />
-                    </div>
-                    <div className="p-4">
-                      <h4 className="font-bold text-lg text-gray-900">{h.title}</h4>
-                      <p className="text-sm text-gray-500 line-clamp-2 mt-1">{h.description}</p>
-                      <div className="mt-4 flex justify-between items-center border-t pt-3">
-                         <span className="text-emerald-600 font-bold">₹{h.price} / night</span>
-                         <span className="text-xs bg-emerald-50 text-emerald-700 px-2 py-1 rounded font-bold uppercase">Approved</span>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            );
-          })()}
-        </div>
       </main>
 
       {/* PROCEED */}

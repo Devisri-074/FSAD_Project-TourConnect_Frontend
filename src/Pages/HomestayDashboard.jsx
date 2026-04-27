@@ -737,14 +737,24 @@ if (!user) {
                        >
                          <option value="">Select a City</option>
                          {(() => {
-                           const hardcoded = Object.values(citiesByState).flat();
-                           const localAdmin = JSON.parse(localStorage.getItem("admin_cities") || "{}");
-                           const localList = Object.values(localAdmin).flat();
-                           const allCities = [...hardcoded, ...localList.filter(lc => !hardcoded.find(h => h.slug === lc.slug))];
-                           return allCities.sort((a,b) => a.name.localeCompare(b.name)).map(city => (
-                             <option key={city.slug} value={city.name}>{city.name}</option>
-                           ));
-                         })()}
+                            // 1. Get default static cities
+                            const hardcoded = Object.values(citiesByState).flat();
+                            
+                            // 2. Get custom cities added by Admin
+                            const adminCities = JSON.parse(localStorage.getItem("availableCities") || "[]");
+                            
+                            // 3. Merge and prevent duplicates by name
+                            const allCities = [...hardcoded];
+                            adminCities.forEach(ac => {
+                               if (!allCities.find(h => h.name.toLowerCase() === ac.name.toLowerCase())) {
+                                  allCities.push(ac);
+                               }
+                            });
+
+                            return allCities.sort((a,b) => a.name.localeCompare(b.name)).map(city => (
+                              <option key={city.slug || city.name} value={city.name}>{city.name}</option>
+                            ));
+                          })()}
                        </select>
                     </div>
                     <div>
