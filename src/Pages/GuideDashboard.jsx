@@ -78,7 +78,11 @@ function GuideDashboard() {
   useEffect(() => {
     loadAssignments();
     window.addEventListener("storage", loadAssignments);
-    return () => window.removeEventListener("storage", loadAssignments);
+    window.addEventListener("bookingUpdated", loadAssignments);
+    return () => {
+      window.removeEventListener("storage", loadAssignments);
+      window.removeEventListener("bookingUpdated", loadAssignments);
+    };
   }, [navigate]);
 
   const handleLogout = () => {
@@ -95,6 +99,7 @@ function GuideDashboard() {
       getUniqueKey(b) === targetKey ? { ...b, guideStatus: newStatus } : b
     );
     localStorage.setItem("savedPlans", JSON.stringify(updatedBookings));
+    window.dispatchEvent(new Event("bookingUpdated"));
     setAssignedTours(prev => prev.map(t =>
       getUniqueKey(t) === targetKey ? { ...t, guideStatus: newStatus } : t
     ));

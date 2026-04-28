@@ -186,6 +186,7 @@ function Plan() {
     };
     savedPlans.push(newPlan);
     localStorage.setItem("savedPlans", JSON.stringify(savedPlans));
+    window.dispatchEvent(new Event("bookingUpdated"));
 
     const guideNameFromStorage =
       localStorage.getItem(`guideName_${city.toLowerCase().trim()}`) || "N/A";

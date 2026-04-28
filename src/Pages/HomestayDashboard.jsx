@@ -172,7 +172,11 @@ function HomestayDashboard() {
 
     loadData();
     window.addEventListener("storage", loadData);
-    return () => window.removeEventListener("storage", loadData);
+    window.addEventListener("bookingUpdated", loadData);
+    return () => {
+      window.removeEventListener("storage", loadData);
+      window.removeEventListener("bookingUpdated", loadData);
+    };
   }, [navigate]);
 
 
@@ -235,6 +239,7 @@ function HomestayDashboard() {
       getUniqueKey(b) === targetKey ? { ...b, homestayStatus: newStatus } : b
     );
     localStorage.setItem("savedPlans", JSON.stringify(updatedBookings));
+    window.dispatchEvent(new Event("bookingUpdated"));
     setReservedStays(prev => prev.map(t =>
       getUniqueKey(t) === targetKey ? { ...t, homestayStatus: newStatus } : t
     ));

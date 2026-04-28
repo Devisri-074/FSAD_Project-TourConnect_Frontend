@@ -161,6 +161,9 @@ function TouristDashboard() {
     };
 
     checkSession();
+
+    window.addEventListener("bookingUpdated", () => checkSession());
+    return () => window.removeEventListener("bookingUpdated", () => checkSession());
   }, [navigate]);
 
   const handleLogout = () => {
