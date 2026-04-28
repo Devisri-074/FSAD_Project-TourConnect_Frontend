@@ -76,9 +76,12 @@ function GuideDashboard() {
     loadAssignments();
     window.addEventListener("storage", loadAssignments);
     window.addEventListener("bookingUpdated", loadAssignments);
+    // Poll backend every 10 seconds for new bookings
+    const interval = setInterval(loadAssignments, 10000);
     return () => {
       window.removeEventListener("storage", loadAssignments);
       window.removeEventListener("bookingUpdated", loadAssignments);
+      clearInterval(interval);
     };
   }, [navigate]);
 

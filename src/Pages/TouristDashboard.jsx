@@ -156,7 +156,12 @@ function TouristDashboard() {
     checkSession();
 
     window.addEventListener("bookingUpdated", () => checkSession());
-    return () => window.removeEventListener("bookingUpdated", () => checkSession());
+    // Poll backend every 10 seconds for status updates
+    const interval = setInterval(checkSession, 10000);
+    return () => {
+      window.removeEventListener("bookingUpdated", () => checkSession());
+      clearInterval(interval);
+    };
   }, [navigate]);
 
   const handleLogout = () => {

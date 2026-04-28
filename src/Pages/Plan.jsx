@@ -202,21 +202,25 @@ function Plan() {
       status: "PENDING",
     };
 
-    // Save to backend with retry
+    // Wake up backend first, then save booking
+    const BACKEND = "https://fsad-tourconnect-backend.onrender.com";
     const saveToBackend = async () => {
-      for (let attempt = 1; attempt <= 3; attempt++) {
+      // Wake up ping
+      try { await fetch(`${BACKEND}/api/bookings`); } catch { }
+      // Now save with retries
+      for (let attempt = 1; attempt <= 5; attempt++) {
         try {
-          const res = await fetch("https://fsad-tourconnect-backend.onrender.com/api/bookings", {
+          const res = await fetch(`${BACKEND}/api/bookings`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify(bookingPayload),
           });
-          if (res.ok) return;
+          if (res.ok) { console.log("Booking saved to backend"); return; }
         } catch (e) {
-          if (attempt === 3) console.warn("Backend save failed after 3 attempts");
-          else await new Promise(r => setTimeout(r, 2000));
+          if (attempt < 5) await new Promise(r => setTimeout(r, 3000));
         }
       }
+      console.warn("Backend save failed - booking only in localStorage");
     };
     saveToBackend();
 

@@ -158,9 +158,12 @@ function HomestayDashboard() {
     loadData();
     window.addEventListener("storage", loadData);
     window.addEventListener("bookingUpdated", loadData);
+    // Poll backend every 10 seconds for new bookings
+    const interval = setInterval(loadData, 10000);
     return () => {
       window.removeEventListener("storage", loadData);
       window.removeEventListener("bookingUpdated", loadData);
+      clearInterval(interval);
     };
   }, [navigate]);
 
