@@ -62,12 +62,13 @@ function GuideDashboard() {
     // Load offline tours safely first
     mergeGuideTours(bookingsData, true);
 
-    // Fetch live backend metrics
+    // Fetch from backend — show all bookings with a guide
     fetch("https://fsad-tourconnect-backend.onrender.com/api/bookings", { credentials: "include" })
       .then(res => res.json())
       .then(data => {
         if (data && Array.isArray(data)) {
-          mergeGuideTours(data, false);
+          const guideBookings = data.filter(b => b.guideName && b.guideName !== "N/A");
+          mergeGuideTours(guideBookings, false);
         }
       }).catch(() => { });
   };

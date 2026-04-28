@@ -110,28 +110,17 @@ function HomestayDashboard() {
 
       setReservedStays(plansWithStays);
 
-      // Fetch live backend metrics
+      // Fetch from backend — show all bookings with a homestay
       fetch(`https://fsad-tourconnect-backend.onrender.com/api/bookings`, { credentials: "include" })
         .then(res => res.json())
         .then(data => {
           if (data && Array.isArray(data)) {
-            const myBookings = data.filter(b => {
-              const isIdMatch = b.hostId && String(b.hostId) === String(currentUser.id);
-              const isDefaultHost = String(currentUser.id) === "4";
-              const hasNoHostId = !b.hostId || b.hostId === "null";
-              const hasHomestayName = b.homestayName && b.homestayName !== "N/A";
-              return isIdMatch || (isDefaultHost && hasHomestayName && hasNoHostId);
-            });
+            const myBookings = data.filter(b => b.homestayName && b.homestayName !== "N/A");
             setReservedStays(prev => {
+              const getKey = (item) => `${item.city}-${item.startDate}-${item.endDate}-${item.userEmail}`.toLowerCase().trim();
               const merged = [...prev];
               myBookings.forEach(d => {
-                const getUniqueKey = (item) => `${item.city}-${item.startDate}-${item.endDate}-${item.userEmail}`.toLowerCase().trim();
-                const newKey = getUniqueKey(d);
-
-                const alreadyExists = merged.some(p => getUniqueKey(p) === newKey);
-                if (!alreadyExists) {
-                  merged.push(d);
-                }
+                if (!merged.some(p => getKey(p) === getKey(d))) merged.push({ ...d, homestayPrice: d.homestayPrice || 1500 });
               });
               return merged;
             });
