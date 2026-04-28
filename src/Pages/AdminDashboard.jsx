@@ -153,8 +153,8 @@ function AdminDashboard() {
          .then(() => setBackendStatus("online"))
          .catch(() => setBackendStatus("offline"));
 
-      // FETCH FROM BACKEND — replace local list with DB truth
-      fetch("https://fsad-tourconnect-backend.onrender.com/api/users", { credentials: "include" })
+      // FETCH FROM BACKEND — merge with local users
+      fetch("https://fsad-tourconnect-backend.onrender.com/api/users")
          .then(res => res.json())
          .then(data => {
             if (data && Array.isArray(data) && data.length > 0) {
@@ -164,23 +164,28 @@ function AdminDashboard() {
                   role: (d.role || "tourist").toLowerCase(),
                   approvalStatus: d.approvalStatus || "approved"
                }));
-               setAllUsers(normalized);
-               localStorage.setItem("users", JSON.stringify(normalized));
+               // Merge backend users with local defaults (avoid duplicates by email)
+               const localUsers = JSON.parse(localStorage.getItem("users")) || [];
+               const merged = [...normalized];
+               localUsers.forEach(lu => {
+                  if (!merged.find(u => u.email?.toLowerCase() === lu.email?.toLowerCase())) {
+                     merged.push(lu);
+                  }
+               });
+               setAllUsers(merged);
+               localStorage.setItem("users", JSON.stringify(merged));
             }
-         }).catch(err => console.error("Admin user sync failed:", err));
+         }).catch(() => {});
 
-      fetch("https://fsad-tourconnect-backend.onrender.com/api/bookings", { credentials: "include" })
+      fetch("https://fsad-tourconnect-backend.onrender.com/api/bookings")
          .then(res => res.json())
          .then(data => {
             if (data && Array.isArray(data)) {
-               setAllPlans(prev => {
-                  const getRef = (b) => `${b.userEmail}-${b.city}-${b.startDate}-${b.endDate}`.toLowerCase().trim();
-                  return combined.filter((v, i, a) => a.findIndex(t => getRef(t) === getRef(v)) === i);
-               });
+               setAllPlans(data);
             }
-         }).catch(err => console.error("Admin bookings sync failed:", err));
+         }).catch(() => {});
 
-      fetch("https://fsad-tourconnect-backend.onrender.com/api/homestays", { credentials: "include" })
+      fetch("https://fsad-tourconnect-backend.onrender.com/api/homestays")
          .then(res => res.json())
          .then(data => {
             if (data && Array.isArray(data)) {
