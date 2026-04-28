@@ -175,9 +175,9 @@ function Plan() {
   guidePrice:
     Number(localStorage.getItem(`guidePrice_${city.toLowerCase().trim()}`)) || 0,
 
-  // 🔥 ADD THESE FOR DASHBOARD SYNC
-  hostId: localStorage.getItem(`hostId_${city.toLowerCase().trim()}`),
-  guideUserId: localStorage.getItem(`guideUserId_${city.toLowerCase().trim()}`),
+  // Always store IDs — fallback to default host(4) and guide(5) for hardcoded entries
+  hostId: Number(localStorage.getItem(`hostId_${city.toLowerCase().trim()}`)) || 4,
+  guideUserId: Number(localStorage.getItem(`guideUserId_${city.toLowerCase().trim()}`)) || 5,
 
   // 🔥 ADD THIS (IMPORTANT FOR HOST)
   status: "pending",
@@ -207,7 +207,7 @@ function Plan() {
           endDate: endDate,
           homestayPrice: homestayPrice,
           guidePrice: guidePrice,
-          hostId: Number(localStorage.getItem(`hostId_${city.toLowerCase().trim()}`)) || null,
+          hostId: Number(localStorage.getItem(`hostId_${city.toLowerCase().trim()}`)) || 4,
           status: "PENDING",
         }),
       });

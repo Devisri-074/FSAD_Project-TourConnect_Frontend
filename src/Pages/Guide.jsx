@@ -163,7 +163,9 @@ function Guide() {
                     const cityKey = city.toLowerCase().trim();
                     localStorage.setItem(`guideName_${cityKey}`, guide.name);
                     localStorage.setItem(`guidePrice_${cityKey}`, guide.price);
-                    if (guide.userId) localStorage.setItem(`guideUserId_${cityKey}`, guide.userId);
+                    // Always store guideUserId — use guide's userId or default guide (id=5)
+                    const guideUserId = guide.userId || 5;
+                    localStorage.setItem(`guideUserId_${cityKey}`, guideUserId);
 
                     const existingStay = localStorage.getItem(`homestayName_${cityKey}`);
 

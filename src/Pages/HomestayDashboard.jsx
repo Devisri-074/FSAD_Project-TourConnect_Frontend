@@ -92,29 +92,14 @@ function HomestayDashboard() {
 
     const plansWithStays = bookingsData
       .filter(b => {
-        const cityVal = b.city || "";
-        const cityKey = cityVal.toLowerCase().trim();
-        const fallbackName = localStorage.getItem(`homestayName_${cityKey}`);
-        const actualStay =
-          b.homestayName && b.homestayName !== "N/A"
-            ? b.homestayName
-            : fallbackName;
-        
-        if (!actualStay) return false;
-
-        // ✅ MATCH BY NAME (for existing hardcoded homestays if host name matches)
-        const isNameMatch = actualStay.toLowerCase().trim() === currentUser.fullName.toLowerCase().trim() ||
-                            actualStay.toLowerCase().includes(currentUser.fullName.toLowerCase()) ||
-                            currentUser.fullName.toLowerCase().includes(actualStay.toLowerCase());
-        
-        // ✅ MATCH BY ID (for new properties)
-        const isHostMatch = String(b.hostId) === String(currentUser.id);
-        
-        // 🔥 DEMO FALLBACK: Show unassigned bookings to the demo host
-        const isDemoHost = currentUser.email === "host@test.com";
-        const isUnassigned = !b.hostId || b.hostId === "null" || b.hostId === "N/A";
-
-        return isNameMatch || isHostMatch || (isDemoHost && isUnassigned);
+        const isIdMatch = b.hostId && String(b.hostId) === String(currentUser.id);
+        const isNameMatch = b.homestayName && currentUser.fullName &&
+          b.homestayName.toLowerCase().includes(currentUser.fullName.toLowerCase());
+        // Default host (id=4) gets all bookings that have hostId=4 or no hostId assigned
+        const isDefaultHost = String(currentUser.id) === "4";
+        const hasNoHostId = !b.hostId || b.hostId === "null" || b.hostId === "N/A";
+        const hasHomestayName = b.homestayName && b.homestayName !== "N/A";
+        return isIdMatch || isNameMatch || (isDefaultHost && hasHomestayName && hasNoHostId);
       })
       .map(b => {
         const cityVal = b.city || "";
@@ -134,11 +119,11 @@ function HomestayDashboard() {
       .then(data => {
         if(data && Array.isArray(data)) {
           const myBookings = data.filter(b => {
-            const nameMatch = b.homestayName && currentUser.fullName &&
-              (b.homestayName.toLowerCase().includes(currentUser.fullName.toLowerCase()) ||
-               currentUser.fullName.toLowerCase().includes(b.homestayName.toLowerCase()));
-            const idMatch = b.hostId && String(b.hostId) === String(currentUser.id);
-            return nameMatch || idMatch;
+            const isIdMatch = b.hostId && String(b.hostId) === String(currentUser.id);
+            const isDefaultHost = String(currentUser.id) === "4";
+            const hasNoHostId = !b.hostId || b.hostId === "null";
+            const hasHomestayName = b.homestayName && b.homestayName !== "N/A";
+            return isIdMatch || (isDefaultHost && hasHomestayName && hasNoHostId);
           });
           setReservedStays(prev => {
             const merged = [...prev];
@@ -324,12 +309,17 @@ function HomestayDashboard() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           title: newPropName,
+          name: newPropName,
           city: newPropCity.toLowerCase().trim(),
+          citySlug: newPropCity.toLowerCase().replace(/\s+/g, '-').trim(),
           price: Number(newPropPrice),
           description: newPropDesc,
           image: finalImage,
           hostId: user.id,
-          status: "PENDING"
+          hostName: user.fullName,
+          hostEmail: user.email,
+          status: "PENDING",
+          approvalStatus: "PENDING"
         })
       });
       if (res.ok) {

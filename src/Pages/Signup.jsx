@@ -372,9 +372,10 @@ function Signup() {
                   onChange={handleChange}
                   style={inputStyle}
                 >
-                  {(JSON.parse(localStorage.getItem("availableCities")) || ["Hyderabad", "Warangal", "Mysore", "Chennai", "Madurai", "Jaipur", "Udaipur", "Mumbai", "Pune", "Delhi", "Bangalore", "Goa", "Kochi", "Munnar", "Kolkata", "Manali", "Shimla"]).sort().map(city => (
-                    <option key={city} value={city}>{city}</option>
-                  ))}
+                  {(JSON.parse(localStorage.getItem("availableCities")) || ["Hyderabad", "Warangal", "Mysore", "Chennai", "Madurai", "Jaipur", "Udaipur", "Mumbai", "Pune", "Delhi", "Bangalore", "Goa", "Kochi", "Munnar", "Kolkata", "Manali", "Shimla"]).map(city => {
+                    const cityName = typeof city === 'object' ? city.name : city;
+                    return <option key={cityName} value={cityName}>{cityName}</option>;
+                  })}
                 </select>
               </div>
             )}

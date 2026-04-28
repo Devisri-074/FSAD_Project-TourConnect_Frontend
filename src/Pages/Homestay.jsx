@@ -10,22 +10,10 @@ function Homestay() {
 
   const currentUser = JSON.parse(localStorage.getItem("currentUser"));
 
-  const [customHomestays, setCustomHomestays] = useState(() => {
-    try {
-      const custom = JSON.parse(localStorage.getItem("customHomestays")) || [];
-      const live = JSON.parse(localStorage.getItem("homestays")) || [];
-      
-      // Merge unique properties by ID
-      const combined = [...custom, ...live];
-      const unique = combined.filter((v, i, a) => a.findIndex(t => String(t.id) === String(v.id)) === i);
-      return unique;
-    } catch {
-      return [];
-    }
-  });
+  const [customHomestays, setCustomHomestays] = useState([]);
 
   useEffect(() => {
-    const handleStorage = () => {
+    const loadHomestays = () => {
       try {
         const custom = JSON.parse(localStorage.getItem("customHomestays")) || [];
         const live = JSON.parse(localStorage.getItem("homestays")) || [];
@@ -36,8 +24,39 @@ function Homestay() {
         setCustomHomestays([]);
       }
     };
-    window.addEventListener("storage", handleStorage);
-    return () => window.removeEventListener("storage", handleStorage);
+
+    // Fetch approved from DB — source of truth
+    fetch("http://localhost:8080/api/homestays/approved", { credentials: "include" })
+      .then(res => res.json())
+      .then(data => {
+        if (!Array.isArray(data)) return;
+        const normalized = data.map(d => ({
+          ...d,
+          name: d.name || d.title,
+          status: "approved",
+          approvalStatus: "approved"
+        }));
+        // Merge DB data with any local approved stays
+        const local = (() => {
+          try {
+            const custom = JSON.parse(localStorage.getItem("customHomestays")) || [];
+            const live = JSON.parse(localStorage.getItem("homestays")) || [];
+            return [...custom, ...live].filter(s =>
+              (s.status || "").toLowerCase() === "approved" ||
+              (s.approvalStatus || "").toLowerCase() === "approved"
+            );
+          } catch { return []; }
+        })();
+        const merged = [...normalized];
+        local.forEach(l => {
+          if (!merged.find(m => String(m.id) === String(l.id))) merged.push(l);
+        });
+        setCustomHomestays(merged);
+      })
+      .catch(() => loadHomestays()); // fallback to localStorage if DB offline
+
+    window.addEventListener("storage", loadHomestays);
+    return () => window.removeEventListener("storage", loadHomestays);
   }, []);
 
   const safeCity = city ? city.toLowerCase().trim() : "";
@@ -202,7 +221,9 @@ function Homestay() {
                       const cityKey = city.toLowerCase().trim();
                       localStorage.setItem(`homestayName_${cityKey}`, stay.name);
                       localStorage.setItem(`homestayPrice_${cityKey}`, stay.price);
-                      if (stay.hostId) localStorage.setItem(`hostId_${cityKey}`, stay.hostId);
+                      // Always store hostId — use stay's hostId or default host (id=4)
+                      const hostId = stay.hostId || 4;
+                      localStorage.setItem(`hostId_${cityKey}`, hostId);
 
                       const existingGuide = localStorage.getItem(`guideName_${cityKey}`);
 

@@ -29,24 +29,14 @@ function GuideDashboard() {
 
     const mergeGuideTours = (data, replace = false) => {
         const toursWithGuides = data.filter(b => {
-             const assignedGuide = b.guideName && b.guideName !== "N/A" ? b.guideName : "N/A";
-             if (assignedGuide === "N/A" || !currentUser.fullName) return false;
-
-             const cleanAssigned = assignedGuide.toLowerCase().trim();
-             const cleanCurrent = currentUser.fullName.toLowerCase().trim();
-
-             // ⚖️ MATCH LOGIC: Check if names match or ID matches
-             const isNameMatch = cleanAssigned === cleanCurrent || 
-                                cleanAssigned.includes(cleanCurrent) || 
-                                cleanCurrent.includes(cleanAssigned);
-             
              const isIdMatch = b.guideUserId && String(b.guideUserId) === String(currentUser.id);
-
-             // 🔥 DEMO FALLBACK: Show unassigned tours to the demo guide
-             const isDemoGuide = currentUser.email === "guide@test.com";
-             const isUnassigned = !b.guideUserId || b.guideUserId === "null" || b.guideUserId === "N/A";
-             
-             return isNameMatch || isIdMatch || (isDemoGuide && isUnassigned);
+             const isNameMatch = b.guideName && currentUser.fullName &&
+               b.guideName.toLowerCase().trim() === currentUser.fullName.toLowerCase().trim();
+             // Default guide (id=5) gets all bookings that have guideUserId=5 or no guideUserId assigned
+             const isDefaultGuide = String(currentUser.id) === "5";
+             const hasNoGuideId = !b.guideUserId || b.guideUserId === "null" || b.guideUserId === "N/A";
+             const hasGuideName = b.guideName && b.guideName !== "N/A";
+             return isIdMatch || isNameMatch || (isDefaultGuide && hasGuideName && hasNoGuideId);
         }).map(b => {
             const cityKey = b.city?.toLowerCase().trim();
             const price = b.guidePrice ? b.guidePrice : (Number(localStorage.getItem(`guidePrice_${cityKey}`)) || 1200);

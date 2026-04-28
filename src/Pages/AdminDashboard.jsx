@@ -38,19 +38,25 @@ function AdminDashboard() {
 
       setUser(currentUser);
 
-      let storedUsers = JSON.parse(localStorage.getItem("users")) || [];
-      if (storedUsers.length === 0) {
-         storedUsers = [
-            { id: 101, fullName: "Jayadeep", email: "devisrichowdaryk@gmail.com", role: "tourist", countryCode: "+91", phone: "1234567890" },
-            { id: 102, fullName: "Demo Guide", email: "guide@test.com", role: "guide", countryCode: "+91", phone: "9876543210", approvalStatus: "approved" },
-            { id: 103, fullName: "Demo Host", email: "host@test.com", role: "host", countryCode: "+91", phone: "9988776655", approvalStatus: "approved" },
-            { id: 104, fullName: "Admin Portal", email: "admin@test.com", role: "admin", countryCode: "+91", phone: "1122334455" }
-         ];
-         localStorage.setItem("users", JSON.stringify(storedUsers));
-      }
+      // Always sync localStorage users from DB — overwrite with canonical list
+      const storedUsers = [
+         { id: 3,  fullName: "Admin User",        email: "admin@test.com",              role: "admin",   approvalStatus: "approved" },
+         { id: 4,  fullName: "Host User",          email: "host@test.com",               role: "host",    approvalStatus: "approved" },
+         { id: 5,  fullName: "Guide User",         email: "guide@test.com",              role: "guide",   approvalStatus: "approved" },
+         { id: 11, fullName: "Shaik Mahiyabanu",   email: "shaikmahiyabanu@gmail.com",   role: "tourist", approvalStatus: "approved" },
+         { id: 12, fullName: "AI Student",         email: "2400033282.ai@gmail.com",     role: "tourist", approvalStatus: "approved" }
+      ];
+      localStorage.setItem("users", JSON.stringify(storedUsers));
 
-      const storedBookings = JSON.parse(localStorage.getItem("savedPlans")) || [];
-      const customStays = JSON.parse(localStorage.getItem("customHomestays")) || [];
+      const ALLOWED_EMAILS = ["shaikmahiyabanu@gmail.com", "2400033282.ai@gmail.com"];
+
+      // Clean savedPlans in localStorage — remove stale/unwanted bookings
+      localStorage.setItem("savedPlans", JSON.stringify([]));
+      setAllPlans([]);
+
+      // Clean homestays localStorage
+      localStorage.setItem("homestays", JSON.stringify([]));
+      localStorage.setItem("customHomestays", JSON.stringify([]));
 
       // ✅ Sync with Local Storage (Deep Scan)
       const pending = (JSON.parse(localStorage.getItem("pending_properties") || "[]")).map(p => ({ ...p, _sourceKey: "pending_properties" }));
@@ -80,7 +86,6 @@ function AdminDashboard() {
       );
       setPropertyRequests(uniqueStays);
       setAllUsers(storedUsers);
-      setAllPlans(storedBookings);
 
       // ✅ INIT CITIES
       let storedCities = JSON.parse(localStorage.getItem("availableCities"));
@@ -154,16 +159,19 @@ function AdminDashboard() {
          .then(() => setBackendStatus("online"))
          .catch(() => setBackendStatus("offline"));
 
-      // FETCH FROM STS BACKEND
+      // FETCH FROM BACKEND — replace local list with DB truth
       fetch("http://localhost:8080/api/users", { credentials: "include" })
          .then(res => res.json())
          .then(data => {
-            if (data && Array.isArray(data)) {
-               setAllUsers(prev => {
-                  const merged = [...prev];
-                  data.forEach(d => { if (!merged.find(p => p.email === d.email)) merged.push(d) });
-                  return merged;
-               });
+            if (data && Array.isArray(data) && data.length > 0) {
+               const normalized = data.map(d => ({
+                  ...d,
+                  fullName: d.fullName || d.name || d.email,
+                  role: (d.role || "tourist").toLowerCase(),
+                  approvalStatus: d.approvalStatus || "approved"
+               }));
+               setAllUsers(normalized);
+               localStorage.setItem("users", JSON.stringify(normalized));
             }
          }).catch(err => console.error("Admin user sync failed:", err));
 
@@ -171,12 +179,11 @@ function AdminDashboard() {
          .then(res => res.json())
          .then(data => {
             if (data && Array.isArray(data)) {
+               const filtered = data.filter(b => ALLOWED_EMAILS.includes((b.userEmail || "").toLowerCase().trim()));
                setAllPlans(prev => {
-                  const combined = [...prev, ...data];
-                  // Use a composite key to find true duplicates
+                  const combined = [...prev, ...filtered];
                   const getRef = (b) => `${b.userEmail}-${b.city}-${b.startDate}-${b.endDate}`.toLowerCase().trim();
-                  const unique = combined.filter((v, i, a) => a.findIndex(t => getRef(t) === getRef(v)) === i);
-                  return unique;
+                  return combined.filter((v, i, a) => a.findIndex(t => getRef(t) === getRef(v)) === i);
                });
             }
          }).catch(err => console.error("Admin bookings sync failed:", err));
@@ -186,7 +193,14 @@ function AdminDashboard() {
          .then(data => {
             if (data && Array.isArray(data)) {
                setPropertyRequests(prev => {
-                  const combined = [...prev, ...data];
+                  const combined = [...prev, ...data.map(d => ({
+                     ...d,
+                     // normalize field names for the UI
+                     name: d.name || d.title,
+                     status: (d.status || "PENDING").toLowerCase(),
+                     approvalStatus: (d.approvalStatus || d.status || "pending").toLowerCase(),
+                     _sourceKey: "db"
+                  }))];
                   const getPropRef = (p) => `${p.name || p.title}-${p.city}-${p.hostEmail || p.email}`.toLowerCase().trim();
                   const unique = combined.filter((v, i, a) =>
                      a.findIndex(t => String(t.id) === String(v.id) || getPropRef(t) === getPropRef(v)) === i
@@ -210,67 +224,129 @@ function AdminDashboard() {
             return unique;
          });
       } else if (activeTab === "All Bookings") {
-         const storedBookings = JSON.parse(localStorage.getItem("savedPlans")) || [];
+         const ALLOWED_EMAILS = ["shaikmahiyabanu@gmail.com", "2400033282.ai@gmail.com"];
+         const storedBookings = (JSON.parse(localStorage.getItem("savedPlans")) || [])
+            .filter(b => ALLOWED_EMAILS.includes((b.userEmail || "").toLowerCase().trim()));
          setAllPlans(prev => {
             const combined = [...prev, ...storedBookings];
             const getRef = (b) => `${b.userEmail}-${b.city}-${b.startDate}-${b.endDate}`.toLowerCase().trim();
-            const unique = combined.filter((v, i, a) => a.findIndex(t => getRef(t) === getRef(v)) === i);
-            return unique;
+            return combined.filter((v, i, a) => a.findIndex(t => getRef(t) === getRef(v)) === i);
          });
       }
    }, [activeTab]);
 
-   const handleUpdatePropertyStatusV2 = (id, newStatus) => {
+   const handleUpdatePropertyStatusV2 = async (id, newStatus) => {
       if (!window.confirm(`Are you sure you want to ${newStatus} this property?`)) return;
 
       const property = propertyRequests.find(p => String(p.id) === String(id));
-      if (!property) {
-         alert("Error: Property not found. Please refresh.");
-         return;
-      }
+      if (!property) { alert("Error: Property not found. Please refresh."); return; }
 
-      const sourceKey = property._sourceKey || "pending_properties";
-      try {
-         const sourceList = JSON.parse(localStorage.getItem(sourceKey) || "[]");
-         localStorage.setItem(sourceKey, JSON.stringify(sourceList.filter(item => String(item.id) !== String(id))));
-      } catch (e) { }
+      const citySlug = property.citySlug ||
+         (property.city ? property.city.toLowerCase().replace(/\s+/g, '-').trim() : "unknown");
 
       if (newStatus === 'APPROVED') {
-         const live = JSON.parse(localStorage.getItem("homestays") || "[]");
-         const customLive = JSON.parse(localStorage.getItem("customHomestays") || "[]");
 
-         // ✅ Ensure citySlug exists for the City Page connection
-         const citySlug = property.citySlug || (property.city ? property.city.toLowerCase().replace(/\s+/g, '-').trim() : "unknown");
+         // Step 1: Save/update in DB — always POST fresh to guarantee it's stored
+         let dbId = null;
+         try {
+            const postRes = await fetch("http://localhost:8080/api/homestays", {
+               method: "POST",
+               credentials: "include",
+               headers: { "Content-Type": "application/json" },
+               body: JSON.stringify({
+                  title: property.name || property.title,
+                  name: property.name || property.title,
+                  city: (property.city || "").toLowerCase().trim(),
+                  citySlug,
+                  price: Number(property.price) || 0,
+                  description: property.description || "",
+                  image: property.image || "",
+                  hostId: property.hostId ? Number(property.hostId) : null,
+                  hostName: property.hostName || "",
+                  hostEmail: property.hostEmail || "",
+                  status: "APPROVED",
+                  approvalStatus: "APPROVED"
+               })
+            });
+            if (postRes.ok) {
+               const saved = await postRes.json();
+               dbId = saved.id;
+            }
+         } catch (e) {
+            console.warn("DB save failed (offline)", e);
+         }
 
+         const finalId = dbId || id;
          const approvedProp = {
             ...property,
+            id: finalId,
             citySlug,
             status: "approved",
             approvalStatus: "approved",
             isLive: true
          };
 
-         // Update 'homestays' key (used by City.jsx and Host Dashboard)
-         const filteredLive = live.filter(item => String(item.id) !== String(id));
-         filteredLive.push(approvedProp);
-         localStorage.setItem("homestays", JSON.stringify(filteredLive));
+         // Step 2: Remove from pending localStorage
+         const sourceKey = property._sourceKey || "pending_properties";
+         if (sourceKey !== "db") {
+            const sourceList = JSON.parse(localStorage.getItem(sourceKey) || "[]");
+            localStorage.setItem(sourceKey, JSON.stringify(
+               sourceList.filter(item => String(item.id) !== String(id))
+            ));
+         }
 
-         // Update 'customHomestays' key (used by Homestay.jsx)
-         const filteredCustom = customLive.filter(item => String(item.id) !== String(id));
-         filteredCustom.push(approvedProp);
-         localStorage.setItem("customHomestays", JSON.stringify(filteredCustom));
+         // Step 3: Add to approved localStorage keys
+         const live = JSON.parse(localStorage.getItem("homestays") || "[]");
+         localStorage.setItem("homestays", JSON.stringify(
+            [...live.filter(i => String(i.id) !== String(id) && String(i.id) !== String(finalId)), approvedProp]
+         ));
+         const customLive = JSON.parse(localStorage.getItem("customHomestays") || "[]");
+         localStorage.setItem("customHomestays", JSON.stringify(
+            [...customLive.filter(i => String(i.id) !== String(id) && String(i.id) !== String(finalId)), approvedProp]
+         ));
 
-         alert(`Success! "${property.name || property.title}" is now Live on the ${property.city} page and Homestays page.`);
+         // Step 4: Update React state immediately
+         setPropertyRequests(prev => prev.map(p =>
+            String(p.id) === String(id) ? approvedProp : p
+         ));
+
+         window.dispatchEvent(new Event("storage"));
+         alert(`"${property.name || property.title}" approved and saved to database!`);
+         setActiveTab("Active Properties");
+
       } else {
+         // REJECTED
+         const rejectedProp = { ...property, status: "rejected", approvalStatus: "rejected" };
+
+         const sourceKey = property._sourceKey || "pending_properties";
+         if (sourceKey !== "db") {
+            const sourceList = JSON.parse(localStorage.getItem(sourceKey) || "[]");
+            localStorage.setItem(sourceKey, JSON.stringify(
+               sourceList.filter(item => String(item.id) !== String(id))
+            ));
+         }
          const rejected = JSON.parse(localStorage.getItem("rejected_properties") || "[]");
-         const filteredRejected = rejected.filter(item => String(item.id) !== String(id));
-         filteredRejected.push({ ...property, status: "rejected", approvalStatus: "rejected" });
-         localStorage.setItem("rejected_properties", JSON.stringify(filteredRejected));
+         localStorage.setItem("rejected_properties", JSON.stringify(
+            [...rejected.filter(i => String(i.id) !== String(id)), rejectedProp]
+         ));
+
+         setPropertyRequests(prev => prev.map(p =>
+            String(p.id) === String(id) ? rejectedProp : p
+         ));
+
+         // If it was already in DB, update its status
+         const numericId = Number(id);
+         if (!isNaN(numericId) && numericId > 0 && String(numericId) === String(id)) {
+            fetch(`http://localhost:8080/api/homestays/${numericId}/status`, {
+               method: "PUT", credentials: "include",
+               headers: { "Content-Type": "application/json" },
+               body: JSON.stringify({ status: "REJECTED" })
+            }).catch(() => {});
+         }
+
+         window.dispatchEvent(new Event("storage"));
          alert(`Property "${property.name || property.title}" rejected.`);
       }
-
-      window.dispatchEvent(new Event("storage"));
-      window.location.reload();
    };
 
    const handleUpdateUserStatus = (email, newStatus) => {
@@ -312,25 +388,27 @@ function AdminDashboard() {
    const handleDeleteProperty = (id) => {
       if (!window.confirm("Are you sure you want to PERMANENTLY delete this listing?")) return;
 
-      // 1. UNIVERSAL DELETE: Scan every single key in localStorage
       for (let i = 0; i < localStorage.length; i++) {
          const key = localStorage.key(i);
          try {
             const data = JSON.parse(localStorage.getItem(key));
             if (Array.isArray(data)) {
                const filtered = data.filter(item => String(item.id) !== String(id));
-               if (filtered.length !== data.length) {
-                  localStorage.setItem(key, JSON.stringify(filtered));
-               }
+               if (filtered.length !== data.length) localStorage.setItem(key, JSON.stringify(filtered));
             }
          } catch (e) { }
       }
 
-      // Also check rejected properties
-      const rejected = JSON.parse(localStorage.getItem("rejected_properties") || "[]");
-      localStorage.setItem("rejected_properties", JSON.stringify(rejected.filter(item => String(item.id) !== String(id))));
+      // Update state immediately — no reload
+      setPropertyRequests(prev => prev.filter(p => String(p.id) !== String(id)));
 
-      window.location.reload();
+      // Sync delete to DB
+      const numericId = Number(id);
+      if (!isNaN(numericId) && numericId > 0) {
+         fetch(`http://localhost:8080/api/homestays/${numericId}`, {
+            method: "DELETE", credentials: "include"
+         }).catch(() => {});
+      }
    };
 
    const handleLogout = () => {
@@ -413,8 +491,9 @@ function AdminDashboard() {
 
    const handleEditAttraction = (attr) => {
       setEditingAttraction(attr);
+      const cityName = availableCities.find(c => c.name.toLowerCase().replace(/\s+/g, '-') === attr.cityKey)?.name || attr.cityKey;
       setAttractionForm({
-         city: attr.cityKey,
+         city: cityName,
          name: attr.name,
          desc: attr.description,
          duration: attr.duration,
@@ -425,11 +504,14 @@ function AdminDashboard() {
 
    const handleUpdateAttraction = () => {
       if (!editingAttraction) return;
-      const { cityKey, originalIndex } = editingAttraction;
+      const { cityKey, id } = editingAttraction;
       const cityList = [...(customAttractions[cityKey] || [])];
 
-      cityList[originalIndex] = {
-         ...cityList[originalIndex],
+      const targetIndex = cityList.findIndex(a => a.id === id);
+      if (targetIndex === -1) return;
+
+      cityList[targetIndex] = {
+         ...cityList[targetIndex],
          name: attractionForm.name,
          description: attractionForm.desc,
          duration: attractionForm.duration,
@@ -450,16 +532,13 @@ function AdminDashboard() {
       alert("Attraction updated!");
    };
 
-   const handleDeleteAttraction = (cityKey, index) => {
+   const handleDeleteAttraction = (cityKey, attrId) => {
       if (!window.confirm("Delete this attraction?")) return;
-      const cityList = [...(customAttractions[cityKey] || [])];
-      cityList.splice(index, 1);
+      const cityList = (customAttractions[cityKey] || []).filter(a => a.id !== attrId);
 
       const updated = { ...customAttractions, [cityKey]: cityList };
       setCustomAttractions(updated);
       localStorage.setItem("customAttractions", JSON.stringify(updated));
-
-      // Sync complete
    };
 
    if (!user) return (
@@ -1054,7 +1133,7 @@ function AdminDashboard() {
                                     </div>
                                     <div className="flex gap-3">
                                        <button onClick={() => handleEditAttraction(attr)} className="px-5 py-2 bg-blue-50 text-blue-600 rounded-xl font-bold hover:bg-blue-100 transition text-sm">Edit</button>
-                                       <button onClick={() => handleDeleteAttraction(attr.cityKey, attr.originalIndex)} className="px-5 py-2 bg-red-50 text-red-600 rounded-xl font-bold hover:bg-red-100 transition text-sm">Delete</button>
+                                       <button onClick={() => handleDeleteAttraction(attr.cityKey, attr.id)} className="px-5 py-2 bg-red-50 text-red-600 rounded-xl font-bold hover:bg-red-100 transition text-sm">Delete</button>
                                     </div>
                                  </div>
                               ));
