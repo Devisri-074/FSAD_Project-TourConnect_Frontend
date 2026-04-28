@@ -42,13 +42,11 @@ function AdminDashboard() {
       const storedUsers = [
          { id: 3, fullName: "Admin User", email: "admin@test.com", role: "admin", approvalStatus: "approved" },
          { id: 4, fullName: "Host User", email: "host@test.com", role: "host", approvalStatus: "approved" },
-         { id: 5, fullName: "Guide User", email: "guide@test.com", role: "guide", approvalStatus: "approved" },
-         { id: 11, fullName: "Shaik Mahiyabanu", email: "shaikmahiyabanu@gmail.com", role: "tourist", approvalStatus: "approved" },
-         { id: 12, fullName: "AI Student", email: "2400033282.ai@gmail.com", role: "tourist", approvalStatus: "approved" }
+         { id: 5, fullName: "Guide User", email: "guide@test.com", role: "guide", approvalStatus: "approved" }
       ];
       localStorage.setItem("users", JSON.stringify(storedUsers));
 
-      const ALLOWED_EMAILS = ["shaikmahiyabanu@gmail.com", "2400033282.ai@gmail.com"];
+      const ALLOWED_EMAILS = [];
 
       // Clean savedPlans in localStorage — remove stale/unwanted bookings
       localStorage.setItem("savedPlans", JSON.stringify([]));
@@ -179,9 +177,7 @@ function AdminDashboard() {
          .then(res => res.json())
          .then(data => {
             if (data && Array.isArray(data)) {
-               const filtered = data.filter(b => ALLOWED_EMAILS.includes((b.userEmail || "").toLowerCase().trim()));
                setAllPlans(prev => {
-                  const combined = [...prev, ...filtered];
                   const getRef = (b) => `${b.userEmail}-${b.city}-${b.startDate}-${b.endDate}`.toLowerCase().trim();
                   return combined.filter((v, i, a) => a.findIndex(t => getRef(t) === getRef(v)) === i);
                });
@@ -224,9 +220,7 @@ function AdminDashboard() {
             return unique;
          });
       } else if (activeTab === "All Bookings") {
-         const ALLOWED_EMAILS = ["shaikmahiyabanu@gmail.com", "2400033282.ai@gmail.com"];
-         const storedBookings = (JSON.parse(localStorage.getItem("savedPlans")) || [])
-            .filter(b => ALLOWED_EMAILS.includes((b.userEmail || "").toLowerCase().trim()));
+         const storedBookings = JSON.parse(localStorage.getItem("savedPlans")) || [];
          setAllPlans(prev => {
             const combined = [...prev, ...storedBookings];
             const getRef = (b) => `${b.userEmail}-${b.city}-${b.startDate}-${b.endDate}`.toLowerCase().trim();
@@ -383,6 +377,13 @@ function AdminDashboard() {
          ));
          alert(`Status updated in view for ${searchEmail}.`);
       }
+   };
+
+   const handleDeleteUser = (email) => {
+      if (!window.confirm(`Delete user ${email}?`)) return;
+      const updated = allUsers.filter(u => u.email?.toLowerCase() !== email?.toLowerCase());
+      setAllUsers(updated);
+      localStorage.setItem("users", JSON.stringify(updated));
    };
 
    const handleDeleteProperty = (id) => {
@@ -712,17 +713,24 @@ function AdminDashboard() {
                                        </td>
                                        <td className="p-4 text-gray-600 font-medium">{u.city || "N/A"}</td>
                                        <td className="p-4">
-                                          {u.role !== 'tourist' && u.role !== 'admin' && u.approvalStatus === 'pending' && (
-                                             <div className="flex gap-2">
-                                                <button onClick={() => handleUpdateUserStatus(u.email, 'approved')} className="px-3 py-1 bg-green-500 text-white text-xs font-bold rounded hover:bg-green-600 transition shadow-sm">Accept</button>
-                                                <button onClick={() => handleUpdateUserStatus(u.email, 'rejected')} className="px-3 py-1 bg-red-50 border border-red-200 text-red-600 text-xs font-bold rounded hover:bg-red-100 transition">Reject</button>
-                                             </div>
-                                          )}
-                                          {(u.approvalStatus === 'approved' || !u.approvalStatus) && (
-                                             <span className="text-xs text-green-600 font-medium flex items-center gap-1">
-                                                <CheckCircle size={14} /> Active
-                                             </span>
-                                          )}
+                                          <div className="flex flex-col gap-2">
+                                             {u.role !== 'tourist' && u.role !== 'admin' && u.approvalStatus === 'pending' && (
+                                                <div className="flex gap-2">
+                                                   <button onClick={() => handleUpdateUserStatus(u.email, 'approved')} className="px-3 py-1 bg-green-500 text-white text-xs font-bold rounded hover:bg-green-600 transition shadow-sm">Accept</button>
+                                                   <button onClick={() => handleUpdateUserStatus(u.email, 'rejected')} className="px-3 py-1 bg-red-50 border border-red-200 text-red-600 text-xs font-bold rounded hover:bg-red-100 transition">Reject</button>
+                                                </div>
+                                             )}
+                                             {(u.approvalStatus === 'approved' || !u.approvalStatus) && (
+                                                <span className="text-xs text-green-600 font-medium flex items-center gap-1">
+                                                   <CheckCircle size={14} /> Active
+                                                </span>
+                                             )}
+                                             {u.role !== 'admin' && (
+                                                <button onClick={() => handleDeleteUser(u.email)} className="px-3 py-1 bg-red-600 text-white text-xs font-bold rounded hover:bg-red-700 transition w-fit">
+                                                   Delete
+                                                </button>
+                                             )}
+                                          </div>
                                        </td>
                                     </tr>
                                  ));
