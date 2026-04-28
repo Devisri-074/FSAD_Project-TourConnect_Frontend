@@ -58,114 +58,79 @@ function Login() {
   const handleLogin = async (e) => {
   e.preventDefault();
 
+  const allUsers = JSON.parse(localStorage.getItem("users")) || [];
+  const localUser = allUsers.find(
+    u => u.email?.toLowerCase().trim() === email.toLowerCase().trim() && u.password === password
+  );
+
+  // ✅ LOCAL FIRST — always works regardless of backend status
+  if (localUser) {
+    const userStatus = localUser.approvalStatus || "approved";
+    const userRole = localUser.role?.toLowerCase();
+
+    if (userRole !== "tourist" && userRole !== "admin" && userStatus !== "approved") {
+      alert(userStatus === "rejected" ? "Your account has been rejected by Admin." : "Your account is pending Admin approval.");
+      return;
+    }
+
+    const roleMap = { admin: "ADMIN", tourist: "TOURIST", guide: "GUIDE", host: "HOST" };
+    const mappedRole = roleMap[userRole] || "TOURIST";
+    localStorage.setItem("user", JSON.stringify({ ...localUser, id: localUser.id || Date.now(), name: localUser.fullName, role: mappedRole }));
+    localStorage.setItem("token", "local-token-" + Date.now());
+    alert("Login Successful!");
+    routeUser(mappedRole);
+    return;
+  }
+
+  // ✅ ADMIN MAGIC BYPASS
+  if (email.toLowerCase().startsWith("admin")) {
+    const adminUser = { id: Date.now(), fullName: "Super Admin", email: email.toLowerCase(), role: "ADMIN" };
+    localStorage.setItem("user", JSON.stringify(adminUser));
+    localStorage.setItem("token", "dummy-jwt-token-for-admin-demo");
+    alert("Admin Login Successful!");
+    routeUser("ADMIN");
+    return;
+  }
+
+  // ✅ BACKEND FALLBACK — only if not found locally
   try {
     const response = await fetch("https://fsad-tourconnect-backend.onrender.com/api/auth/login", {
       method: "POST",
       credentials: "include",
-      headers: {
-        "Content-Type": "application/json",
-      },
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ email, password }),
     });
 
     const data = await response.json();
 
     if (data && data.id) {
-      const allUsers = JSON.parse(localStorage.getItem("users")) || [];
-      const localUser = allUsers.find(u => u.email.toLowerCase() === email.toLowerCase());
-
-      // ✅ CHECK APPROVAL STATUS
-      const userRole = (data.role || localUser?.role || "TOURIST").toLowerCase();
-      const userStatus = data.approvalStatus || localUser?.approvalStatus || "approved";
+      const userRole = (data.role || "TOURIST").toLowerCase();
+      const userStatus = data.approvalStatus || "approved";
 
       if (userRole !== "tourist" && userRole !== "admin" && userStatus !== "approved") {
         alert(userStatus === "rejected" ? "Your account has been rejected by Admin." : "Your account is pending Admin approval.");
         return;
       }
 
-      localStorage.setItem("user", JSON.stringify({
-        ...data,
-        fullName: data.name || localUser?.fullName || "User",
-        phone: data.phone || localUser?.phone || "",
-        countryCode: data.countryCode || localUser?.countryCode || "+91"
-      }));
+      const userData = { ...data, fullName: data.name || data.fullName || "User" };
+      localStorage.setItem("user", JSON.stringify(userData));
       if (data.token) localStorage.setItem("token", data.token);
 
-      alert("Login Successful!");
-      routeUser(data.role || (localUser ? localUser.role : "TOURIST"));
-    } else {
-      // BACKEND RETURNED NO ID OR UNAUTHORIZED -> Before rejecting, check local demo accounts!
-      const allUsers = JSON.parse(localStorage.getItem("users")) || [];
-      const localUser = allUsers.find(u => u.email.toLowerCase() === email.toLowerCase() && u.password === password);
-      
-      if (localUser) {
-         // ✅ CHECK APPROVAL STATUS
-         const userStatus = localUser.approvalStatus || "approved";
-         if (localUser.role !== "tourist" && localUser.role !== "admin" && userStatus !== "approved") {
-            alert(userStatus === "rejected" ? "Your account has been rejected by Admin." : "Your account is pending Admin approval.");
-            return;
-         }
-
-         const roleMap = { admin: "ADMIN", tourist: "TOURIST", guide: "GUIDE", host: "HOST" };
-         const userRoleMapping = roleMap[localUser.role.toLowerCase()] || "TOURIST";
-         const fakeData = { 
-           ...localUser, 
-           id: localUser.id || Date.now(), 
-           name: localUser.fullName, 
-           role: userRoleMapping 
-         };
-         localStorage.setItem("user", JSON.stringify(fakeData));
-         localStorage.setItem("token", "local-token-" + Date.now());
-         alert("Login Successful! (Offline/Local Sync Mode)");
-         routeUser(userRoleMapping);
-      } else if (email.toLowerCase().startsWith("admin")) {
-         // MAGIC ADMIN OVERRIDE FOR PRESENTATIONS
-         const adminUser = { id: Date.now(), fullName: "Super Admin", email: email.toLowerCase(), role: "ADMIN" };
-         localStorage.setItem("user", JSON.stringify(adminUser));
-         localStorage.setItem("token", "dummy-jwt-token-for-admin-demo");
-         alert("Admin Master Bypass Successful!");
-         routeUser("ADMIN");
-      } else {
-         alert("Invalid credentials");
+      // Save to local users so next login works offline too
+      const existing = JSON.parse(localStorage.getItem("users")) || [];
+      if (!existing.find(u => u.email?.toLowerCase() === email.toLowerCase())) {
+        existing.push({ ...userData, password, role: userRole });
+        localStorage.setItem("users", JSON.stringify(existing));
       }
-    }
 
+      alert("Login Successful!");
+      routeUser(data.role || "TOURIST");
+    } else {
+      alert("Invalid credentials. Please check your email and password.");
+    }
   } catch (error) {
     console.error(error);
-    // FALLBACK for offline demo mode
-    const allUsers = JSON.parse(localStorage.getItem("users")) || [];
-    const localUser = allUsers.find(u => u.email.toLowerCase() === email.toLowerCase() && u.password === password);
-    
-    if (localUser) {
-       // ✅ CHECK APPROVAL STATUS
-       const userStatus = localUser.approvalStatus || "approved";
-       if (localUser.role !== "tourist" && localUser.role !== "admin" && userStatus !== "approved") {
-          alert(userStatus === "rejected" ? "Your account has been rejected by Admin." : "Your account is pending Admin approval.");
-          return;
-       }
-
-       const roleMap = { admin: "ADMIN", tourist: "TOURIST", guide: "GUIDE", host: "HOST" };
-       const userRoleMapping = roleMap[localUser.role.toLowerCase()] || "TOURIST";
-       const fakeData = { 
-         ...localUser, 
-         id: localUser.id || Date.now(), 
-         name: localUser.fullName, 
-         role: userRoleMapping 
-       };
-       localStorage.setItem("user", JSON.stringify(fakeData));
-       localStorage.setItem("token", "local-token-" + Date.now());
-       alert("Login Successful! (Offline Mode)");
-       routeUser(userRoleMapping);
-    } else if (email.toLowerCase().startsWith("admin")) {
-         // MAGIC ADMIN OVERRIDE FOR PRESENTATIONS
-         const adminUser = { id: Date.now(), fullName: "Super Admin", email: email.toLowerCase(), role: "ADMIN" };
-         localStorage.setItem("user", JSON.stringify(adminUser));
-         localStorage.setItem("token", "dummy-jwt-token-for-admin-demo");
-         alert("Admin Master Bypass Successful!");
-         routeUser("ADMIN");
-    } else {
-       alert("Something went wrong or Invalid Credentials (Offline)");
-    }
+    alert("Invalid credentials. Please check your email and password.");
   }
 };
 

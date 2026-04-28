@@ -38,23 +38,20 @@ function AdminDashboard() {
 
       setUser(currentUser);
 
-      // Always sync localStorage users from DB — overwrite with canonical list
-      const storedUsers = [
-         { id: 3, fullName: "Admin User", email: "admin@test.com", role: "admin", approvalStatus: "approved" },
-         { id: 4, fullName: "Host User", email: "host@test.com", role: "host", approvalStatus: "approved" },
-         { id: 5, fullName: "Guide User", email: "guide@test.com", role: "guide", approvalStatus: "approved" }
+      // Seed default users only if they don't already exist
+      const defaultUsers = [
+         { id: 3, fullName: "Admin User", email: "admin@test.com", password: "admin123", role: "admin", approvalStatus: "approved" },
+         { id: 4, fullName: "Host User", email: "host@test.com", password: "host123", role: "host", approvalStatus: "approved" },
+         { id: 5, fullName: "Guide User", email: "guide@test.com", password: "guide123", role: "guide", approvalStatus: "approved" }
       ];
-      localStorage.setItem("users", JSON.stringify(storedUsers));
-
-      const ALLOWED_EMAILS = [];
-
-      // Clean savedPlans in localStorage — remove stale/unwanted bookings
-      localStorage.setItem("savedPlans", JSON.stringify([]));
-      setAllPlans([]);
-
-      // Clean homestays localStorage
-      localStorage.setItem("homestays", JSON.stringify([]));
-      localStorage.setItem("customHomestays", JSON.stringify([]));
+      const existingUsers = JSON.parse(localStorage.getItem("users")) || [];
+      defaultUsers.forEach(def => {
+         if (!existingUsers.find(u => u.email?.toLowerCase() === def.email)) {
+            existingUsers.push(def);
+         }
+      });
+      localStorage.setItem("users", JSON.stringify(existingUsers));
+      setAllUsers(existingUsers);
 
       // ✅ Sync with Local Storage (Deep Scan)
       const pending = (JSON.parse(localStorage.getItem("pending_properties") || "[]")).map(p => ({ ...p, _sourceKey: "pending_properties" }));
@@ -83,7 +80,6 @@ function AdminDashboard() {
          a.findIndex(t => String(t.id) === String(v.id) || getPropRef(t) === getPropRef(v)) === i
       );
       setPropertyRequests(uniqueStays);
-      setAllUsers(storedUsers);
 
       // ✅ INIT CITIES
       let storedCities = JSON.parse(localStorage.getItem("availableCities"));
