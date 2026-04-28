@@ -93,6 +93,15 @@ export const citiesByState = {
       homestays: 2,
       knownFor: "Meenakshi Temple",
     },
+    {
+      name: "Kanyakumari",
+      slug: "kanyakumari",
+      stateName: "Tamil Nadu",
+      image: "https://upload.wikimedia.org/wikipedia/commons/thumb/4/47/Kanyakumari_-_Vivekananda_Rock_Memorial.jpg/1280px-Kanyakumari_-_Vivekananda_Rock_Memorial.jpg",
+      attractions: 6,
+      homestays: 2,
+      knownFor: "Southernmost Tip of India",
+    },
   ],
 
   rajasthan: [
