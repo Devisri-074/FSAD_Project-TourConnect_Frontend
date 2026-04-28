@@ -65,8 +65,9 @@ function Login() {
     { id: 3, fullName: "Demo Guide", email: "guide@test.com", password: "guide123", role: "guide", approvalStatus: "approved" }
   ];
   const existingUsers = JSON.parse(localStorage.getItem("users")) || [];
-  // Always ensure defaults exist with correct passwords
-  const merged = [...existingUsers.filter(u => !defaultUsers.find(d => d.email === u.email)), ...defaultUsers];
+  // Remove old defaults and re-add with correct passwords
+  const nonDefaultUsers = existingUsers.filter(u => !defaultUsers.find(d => d.email === u.email?.toLowerCase()));
+  const merged = [...nonDefaultUsers, ...defaultUsers];
   localStorage.setItem("users", JSON.stringify(merged));
   const allUsers = merged;
   const localUser = allUsers.find(

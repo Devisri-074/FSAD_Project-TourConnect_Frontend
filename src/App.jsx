@@ -70,10 +70,9 @@ function App() {
       { id: 2, fullName: "Demo Host", email: "host@test.com", phone: "8888888888", countryCode: "+91", password: "host123", role: "host", approvalStatus: "approved" },
       { id: 3, fullName: "Demo Guide", email: "guide@test.com", phone: "9999999999", countryCode: "+91", password: "guide123", role: "guide", approvalStatus: "approved" },
     ];
-
-    // Always ensure defaults exist with correct passwords
-    const merged = [...users.filter(u => !defaultUsers.find(d => d.email === u.email)), ...defaultUsers];
-    localStorage.setItem("users", JSON.stringify(merged));
+    // Always remove old defaults and re-add with correct passwords
+    const nonDefaultUsers = users.filter(u => !defaultUsers.find(d => d.email === u.email?.toLowerCase()));
+    localStorage.setItem("users", JSON.stringify([...nonDefaultUsers, ...defaultUsers]));
   }, []);
 
   return (
