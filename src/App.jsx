@@ -65,42 +65,15 @@ function App() {
   useEffect(() => {
     const users = JSON.parse(localStorage.getItem("users")) || [];
 
-    const hasGuide = users.some((u) => u.role === "guide");
-    const hasHost = users.some((u) => u.role === "host");
+    const defaultUsers = [
+      { id: 1, fullName: "Admin Portal", email: "admin@test.com", phone: "0000000000", countryCode: "+91", password: "admin123", role: "admin", approvalStatus: "approved" },
+      { id: 2, fullName: "Demo Host", email: "host@test.com", phone: "8888888888", countryCode: "+91", password: "host123", role: "host", approvalStatus: "approved" },
+      { id: 3, fullName: "Demo Guide", email: "guide@test.com", phone: "9999999999", countryCode: "+91", password: "guide123", role: "guide", approvalStatus: "approved" },
+    ];
 
-    if (!hasGuide || !hasHost) {
-      const defaultUsers = [
-        {
-          fullName: "Demo Guide",
-          email: "guide@test.com",
-          phone: "9999999999",
-          countryCode: "+91",
-          password: "1234",
-          role: "guide",
-        },
-        {
-          fullName: "Demo Host",
-          email: "host@test.com",
-          phone: "8888888888",
-          countryCode: "+91",
-          password: "1234",
-          role: "host",
-        },
-        {
-          fullName: "Admin Portal",
-          email: "admin@test.com",
-          phone: "0000000000",
-          countryCode: "+91",
-          password: "admin",
-          role: "admin",
-        },
-      ];
-
-      localStorage.setItem(
-        "users",
-        JSON.stringify([...users, ...defaultUsers])
-      );
-    }
+    // Always ensure defaults exist with correct passwords
+    const merged = [...users.filter(u => !defaultUsers.find(d => d.email === u.email)), ...defaultUsers];
+    localStorage.setItem("users", JSON.stringify(merged));
   }, []);
 
   return (

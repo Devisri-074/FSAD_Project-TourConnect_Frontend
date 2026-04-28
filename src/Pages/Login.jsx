@@ -60,19 +60,15 @@ function Login() {
 
   // ✅ ALWAYS seed default users before checking
   const defaultUsers = [
-    { id: 1, fullName: "Admin User", email: "admin@test.com", password: "admin123", role: "admin", approvalStatus: "approved" },
-    { id: 2, fullName: "Host User", email: "host@test.com", password: "host123", role: "host", approvalStatus: "approved" },
-    { id: 3, fullName: "Guide User", email: "guide@test.com", password: "guide123", role: "guide", approvalStatus: "approved" }
+    { id: 1, fullName: "Admin Portal", email: "admin@test.com", password: "admin123", role: "admin", approvalStatus: "approved" },
+    { id: 2, fullName: "Demo Host", email: "host@test.com", password: "host123", role: "host", approvalStatus: "approved" },
+    { id: 3, fullName: "Demo Guide", email: "guide@test.com", password: "guide123", role: "guide", approvalStatus: "approved" }
   ];
   const existingUsers = JSON.parse(localStorage.getItem("users")) || [];
-  defaultUsers.forEach(def => {
-    if (!existingUsers.find(u => u.email?.toLowerCase() === def.email)) {
-      existingUsers.push(def);
-    }
-  });
-  localStorage.setItem("users", JSON.stringify(existingUsers));
-
-  const allUsers = existingUsers;
+  // Always ensure defaults exist with correct passwords
+  const merged = [...existingUsers.filter(u => !defaultUsers.find(d => d.email === u.email)), ...defaultUsers];
+  localStorage.setItem("users", JSON.stringify(merged));
+  const allUsers = merged;
   const localUser = allUsers.find(
     u => u.email?.toLowerCase().trim() === email.toLowerCase().trim() && u.password === password
   );
