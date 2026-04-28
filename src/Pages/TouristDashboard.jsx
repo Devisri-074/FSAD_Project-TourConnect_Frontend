@@ -143,19 +143,12 @@ function TouristDashboard() {
 
       setBookings(userBookings);
 
-      // Backend Fetch
-      fetch(`https://fsad-tourconnect-backend.onrender.com/api/bookings/user/${currentUser.email}`, { credentials: "include" })
+      // Backend Fetch — load tourist's bookings by email
+      fetch(`https://fsad-tourconnect-backend.onrender.com/api/bookings/user/${currentUser.email}`)
         .then(res => res.ok ? res.json() : [])
         .then(data => {
           if (data && data.length > 0) {
-            setBookings(prev => {
-              const backendData = data.map(d => {
-                const localMatch = prev.find(p => p.city?.toLowerCase() === d.city?.toLowerCase());
-                const result = { ...d, status: computeOverallStatus(d) };
-                return result;
-              });
-              return backendData;
-            });
+            setBookings(data.map(d => ({ ...d, status: computeOverallStatus(d) })));
           }
         }).catch(() => { });
     };

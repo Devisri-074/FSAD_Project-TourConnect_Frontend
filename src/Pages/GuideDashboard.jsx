@@ -101,17 +101,15 @@ function GuideDashboard() {
       getUniqueKey(t) === targetKey ? { ...t, guideStatus: newStatus } : t
     ));
 
-    // Find real numeric DB id by fetching all bookings and matching
-    fetch("https://fsad-tourconnect-backend.onrender.com/api/bookings", { credentials: "include" })
+    fetch("https://fsad-tourconnect-backend.onrender.com/api/bookings")
       .then(res => res.json())
       .then(data => {
         const match = data.find(b => getUniqueKey(b) === targetKey);
         if (match && match.id) {
           fetch(`https://fsad-tourconnect-backend.onrender.com/api/bookings/${match.id}/status`, {
             method: "PUT",
-            credentials: "include",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ status: newStatus })
+            body: JSON.stringify({ guideStatus: newStatus })
           }).catch(() => { });
         }
       }).catch(() => { });
