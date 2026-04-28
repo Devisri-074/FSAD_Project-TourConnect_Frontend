@@ -95,11 +95,8 @@ function HomestayDashboard() {
           const isIdMatch = b.hostId && String(b.hostId) === String(currentUser.id);
           const isNameMatch = b.homestayName && currentUser.fullName &&
             b.homestayName.toLowerCase().includes(currentUser.fullName.toLowerCase());
-          // Default host (id=4) gets all bookings that have hostId=4 or no hostId assigned
-          const isDefaultHost = String(currentUser.id) === "4";
-          const hasNoHostId = !b.hostId || b.hostId === "null" || b.hostId === "N/A";
           const hasHomestayName = b.homestayName && b.homestayName !== "N/A";
-          return isIdMatch || isNameMatch || (isDefaultHost && hasHomestayName && hasNoHostId);
+          return isIdMatch || isNameMatch || hasHomestayName;
         })
         .map(b => {
           const cityVal = b.city || "";

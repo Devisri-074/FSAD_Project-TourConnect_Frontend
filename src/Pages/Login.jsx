@@ -58,15 +58,29 @@ function Login() {
   const handleLogin = async (e) => {
   e.preventDefault();
 
-  const allUsers = JSON.parse(localStorage.getItem("users")) || [];
+  // ✅ ALWAYS seed default users before checking
+  const defaultUsers = [
+    { id: 1, fullName: "Admin User", email: "admin@test.com", password: "admin123", role: "admin", approvalStatus: "approved" },
+    { id: 2, fullName: "Host User", email: "host@test.com", password: "host123", role: "host", approvalStatus: "approved" },
+    { id: 3, fullName: "Guide User", email: "guide@test.com", password: "guide123", role: "guide", approvalStatus: "approved" }
+  ];
+  const existingUsers = JSON.parse(localStorage.getItem("users")) || [];
+  defaultUsers.forEach(def => {
+    if (!existingUsers.find(u => u.email?.toLowerCase() === def.email)) {
+      existingUsers.push(def);
+    }
+  });
+  localStorage.setItem("users", JSON.stringify(existingUsers));
+
+  const allUsers = existingUsers;
   const localUser = allUsers.find(
     u => u.email?.toLowerCase().trim() === email.toLowerCase().trim() && u.password === password
   );
 
   // ✅ LOCAL FIRST — always works regardless of backend status
   if (localUser) {
-    const userStatus = localUser.approvalStatus || "approved";
-    const userRole = localUser.role?.toLowerCase();
+    const userStatus = (localUser.approvalStatus || "approved").toLowerCase();
+    const userRole = (localUser.role || "tourist").toLowerCase();
 
     if (userRole !== "tourist" && userRole !== "admin" && userStatus !== "approved") {
       alert(userStatus === "rejected" ? "Your account has been rejected by Admin." : "Your account is pending Admin approval.");
@@ -75,7 +89,8 @@ function Login() {
 
     const roleMap = { admin: "ADMIN", tourist: "TOURIST", guide: "GUIDE", host: "HOST" };
     const mappedRole = roleMap[userRole] || "TOURIST";
-    localStorage.setItem("user", JSON.stringify({ ...localUser, id: localUser.id || Date.now(), name: localUser.fullName, role: mappedRole }));
+    const userData = { ...localUser, id: localUser.id || Date.now(), fullName: localUser.fullName, name: localUser.fullName, role: mappedRole, approvalStatus: userStatus };
+    localStorage.setItem("user", JSON.stringify(userData));
     localStorage.setItem("token", "local-token-" + Date.now());
     alert("Login Successful!");
     routeUser(mappedRole);
@@ -105,7 +120,7 @@ function Login() {
 
     if (data && data.id) {
       const userRole = (data.role || "TOURIST").toLowerCase();
-      const userStatus = data.approvalStatus || "approved";
+      const userStatus = (data.approvalStatus || "approved").toLowerCase();
 
       if (userRole !== "tourist" && userRole !== "admin" && userStatus !== "approved") {
         alert(userStatus === "rejected" ? "Your account has been rejected by Admin." : "Your account is pending Admin approval.");
@@ -138,9 +153,11 @@ const routeUser = (role) => {
     const roleUpper = role.toUpperCase();
     
     // ✅ REDIRECT BACK IF 'FROM' STATE EXISTS
-    if (location.state?.from) {
-      navigate(location.state.from, { state: { city: location.state.city } });
-      return;
+    if (location.state?.from && location.state.from !== "/") {
+      if (roleUpper === "TOURIST") {
+        navigate(location.state.from, { state: { city: location.state.city } });
+        return;
+      }
     }
 
     if (roleUpper === "ADMIN") {

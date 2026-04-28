@@ -32,11 +32,8 @@ function GuideDashboard() {
         const isIdMatch = b.guideUserId && String(b.guideUserId) === String(currentUser.id);
         const isNameMatch = b.guideName && currentUser.fullName &&
           b.guideName.toLowerCase().trim() === currentUser.fullName.toLowerCase().trim();
-        // Default guide (id=5) gets all bookings that have guideUserId=5 or no guideUserId assigned
-        const isDefaultGuide = String(currentUser.id) === "5";
-        const hasNoGuideId = !b.guideUserId || b.guideUserId === "null" || b.guideUserId === "N/A";
         const hasGuideName = b.guideName && b.guideName !== "N/A";
-        return isIdMatch || isNameMatch || (isDefaultGuide && hasGuideName && hasNoGuideId);
+        return isIdMatch || isNameMatch || hasGuideName;
       }).map(b => {
         const cityKey = b.city?.toLowerCase().trim();
         const price = b.guidePrice ? b.guidePrice : (Number(localStorage.getItem(`guidePrice_${cityKey}`)) || 1200);
