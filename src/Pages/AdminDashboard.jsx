@@ -946,6 +946,10 @@ function AdminDashboard() {
                                  onChange={(e) => setCityForm({ ...cityForm, image: e.target.value })}
                                  className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none transition"
                               />
+                              <button type="button" onClick={() => setCityForm({ ...cityForm, image: `https://source.unsplash.com/600x400/?${encodeURIComponent(cityForm.name || 'city')},india` })} className="mt-2 text-xs text-blue-600 underline cursor-pointer">Auto-generate image from city name</button>
+                              {cityForm.image ? (
+                                 <img src={cityForm.image} alt="preview" className="mt-2 w-full h-32 object-cover rounded-lg border" onError={(e) => e.target.style.display='none'} />
+                              ) : null}
                            </div>
                            <div>
                               <label className="text-sm font-semibold text-gray-600 block mb-2">Known For</label>
@@ -1036,6 +1040,10 @@ function AdminDashboard() {
                                  onChange={(e) => setAttractionForm({ ...attractionForm, image: e.target.value })}
                                  className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-emerald-500 outline-none transition"
                               />
+                              <button type="button" onClick={() => setAttractionForm({ ...attractionForm, image: `https://source.unsplash.com/600x400/?${encodeURIComponent(attractionForm.name || 'attraction')},india` })} className="mt-2 text-xs text-emerald-600 underline cursor-pointer">Auto-generate image from attraction name</button>
+                              {attractionForm.image ? (
+                                 <img src={attractionForm.image} alt="preview" className="mt-2 w-full h-32 object-cover rounded-lg border" onError={(e) => e.target.style.display='none'} />
+                              ) : null}
                            </div>
                            <button
                               onClick={handleAddAttraction}
@@ -1168,6 +1176,8 @@ function AdminDashboard() {
                         <div>
                            <label className="text-sm font-bold text-gray-600 block mb-2">Image URL</label>
                            <input type="text" value={cityForm.image} onChange={(e) => setCityForm({ ...cityForm, image: e.target.value })} className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none" />
+                           <button type="button" onClick={() => setCityForm({ ...cityForm, image: `https://source.unsplash.com/600x400/?${encodeURIComponent(cityForm.name || 'city')},india` })} className="mt-2 text-xs text-blue-600 underline cursor-pointer">Auto-generate image</button>
+                           {cityForm.image ? <img src={cityForm.image} alt="preview" className="mt-2 w-full h-28 object-cover rounded-lg border" onError={(e) => e.target.style.display='none'} /> : null}
                         </div>
                         <div>
                            <label className="text-sm font-bold text-gray-600 block mb-2">Known For</label>
@@ -1215,6 +1225,8 @@ function AdminDashboard() {
                         <div>
                            <label className="text-sm font-bold text-gray-600 block mb-2">Image URL</label>
                            <input type="text" value={attractionForm.image} onChange={(e) => setAttractionForm({ ...attractionForm, image: e.target.value })} className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-emerald-500 outline-none" />
+                           <button type="button" onClick={() => setAttractionForm({ ...attractionForm, image: `https://source.unsplash.com/600x400/?${encodeURIComponent(attractionForm.name || 'attraction')},india` })} className="mt-2 text-xs text-emerald-600 underline cursor-pointer">Auto-generate image</button>
+                           {attractionForm.image ? <img src={attractionForm.image} alt="preview" className="mt-2 w-full h-28 object-cover rounded-lg border" onError={(e) => e.target.style.display='none'} /> : null}
                         </div>
                         <div className="flex gap-4 pt-4">
                            <button onClick={() => setEditingAttraction(null)} className="flex-1 py-3 bg-gray-100 text-gray-600 rounded-xl font-bold hover:bg-gray-200 transition">Cancel</button>
