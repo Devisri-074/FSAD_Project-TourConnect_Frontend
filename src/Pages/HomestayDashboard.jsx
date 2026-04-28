@@ -91,20 +91,11 @@ function HomestayDashboard() {
       const bookingsData = storedBookings ? JSON.parse(storedBookings) : [];
 
       const plansWithStays = bookingsData
-        .filter(b => {
-          const isIdMatch = b.hostId && String(b.hostId) === String(currentUser.id);
-          const isNameMatch = b.homestayName && currentUser.fullName &&
-            b.homestayName.toLowerCase().includes(currentUser.fullName.toLowerCase());
-          const hasHomestayName = b.homestayName && b.homestayName !== "N/A";
-          return isIdMatch || isNameMatch || hasHomestayName;
-        })
+        .filter(b => b.userEmail)
         .map(b => {
           const cityVal = b.city || "";
           const cityKey = cityVal.toLowerCase().trim();
-          const price =
-            b.homestayPrice ||
-            Number(localStorage.getItem(`homestayPrice_${cityKey}`)) ||
-            1500;
+          const price = b.homestayPrice || Number(localStorage.getItem(`homestayPrice_${cityKey}`)) || 1500;
           return { ...b, homestayPrice: price };
         });
 
@@ -114,12 +105,12 @@ function HomestayDashboard() {
         .then(res => res.json())
         .then(data => {
           if (data && Array.isArray(data)) {
-            const myBookings = data.filter(b => b.homestayName && b.homestayName !== "N/A");
             setReservedStays(prev => {
               const getKey = (item) => `${item.city}-${item.startDate}-${item.endDate}-${item.userEmail}`.toLowerCase().trim();
               const merged = [...prev];
-              myBookings.forEach(d => {
-                if (!merged.some(p => getKey(p) === getKey(d))) merged.push({ ...d, homestayPrice: d.homestayPrice || 1500 });
+              data.forEach(d => {
+                if (!merged.some(p => getKey(p) === getKey(d)))
+                  merged.push({ ...d, homestayPrice: d.homestayPrice || 1500 });
               });
               return merged;
             });

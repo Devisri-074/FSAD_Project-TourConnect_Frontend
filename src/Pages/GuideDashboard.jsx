@@ -28,16 +28,10 @@ function GuideDashboard() {
     const bookingsData = storedBookings ? JSON.parse(storedBookings) : [];
 
     const mergeGuideTours = (data, replace = false) => {
-      const toursWithGuides = data.filter(b => {
-        const isIdMatch = b.guideUserId && String(b.guideUserId) === String(currentUser.id);
-        const isNameMatch = b.guideName && currentUser.fullName &&
-          b.guideName.toLowerCase().trim() === currentUser.fullName.toLowerCase().trim();
-        const hasGuideName = b.guideName && b.guideName !== "N/A";
-        return isIdMatch || isNameMatch || hasGuideName;
-      }).map(b => {
+      const toursWithGuides = data.filter(b => b.userEmail).map(b => {
         const cityKey = b.city?.toLowerCase().trim();
         const price = b.guidePrice ? b.guidePrice : (Number(localStorage.getItem(`guidePrice_${cityKey}`)) || 1200);
-        return { ...b, guidePrice: price, guideName: currentUser.fullName };
+        return { ...b, guidePrice: price };
       });
 
       setUser(currentUser);
@@ -66,8 +60,7 @@ function GuideDashboard() {
       .then(res => res.json())
       .then(data => {
         if (data && Array.isArray(data)) {
-          const guideBookings = data.filter(b => b.guideName && b.guideName !== "N/A");
-          mergeGuideTours(guideBookings, false);
+          mergeGuideTours(data, false);
         }
       }).catch(() => { });
   };
