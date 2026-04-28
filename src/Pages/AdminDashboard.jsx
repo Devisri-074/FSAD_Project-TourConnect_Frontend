@@ -157,25 +157,31 @@ function AdminDashboard() {
       fetch("https://fsad-tourconnect-backend.onrender.com/api/users")
          .then(res => res.json())
          .then(data => {
-            if (data && Array.isArray(data) && data.length > 0) {
-               const normalized = data.map(d => ({
-                  ...d,
-                  fullName: d.fullName || d.name || d.email,
-                  role: (d.role || "tourist").toLowerCase(),
-                  approvalStatus: d.approvalStatus || "approved"
-               }));
-               // Merge backend users with local defaults (avoid duplicates by email)
-               const localUsers = JSON.parse(localStorage.getItem("users")) || [];
-               const merged = [...normalized];
-               localUsers.forEach(lu => {
-                  if (!merged.find(u => u.email?.toLowerCase() === lu.email?.toLowerCase())) {
-                     merged.push(lu);
-                  }
-               });
-               setAllUsers(merged);
-               localStorage.setItem("users", JSON.stringify(merged));
-            }
-         }).catch(() => {});
+            const backendUsers = Array.isArray(data) ? data.map(d => ({
+               ...d,
+               fullName: d.fullName || d.name || d.email,
+               role: (d.role || "tourist").toLowerCase(),
+               approvalStatus: d.approvalStatus || "approved"
+            })) : [];
+
+            // Get all locally signed-up users
+            const localUsers = JSON.parse(localStorage.getItem("users")) || [];
+
+            // Merge: backend takes priority, add local-only users
+            const merged = [...backendUsers];
+            localUsers.forEach(lu => {
+               if (!merged.find(u => u.email?.toLowerCase() === lu.email?.toLowerCase())) {
+                  merged.push(lu);
+               }
+            });
+
+            setAllUsers(merged);
+            localStorage.setItem("users", JSON.stringify(merged));
+         }).catch(() => {
+            // Backend offline — show local users only
+            const localUsers = JSON.parse(localStorage.getItem("users")) || [];
+            setAllUsers(localUsers);
+         });
 
       fetch("https://fsad-tourconnect-backend.onrender.com/api/bookings")
          .then(res => res.json())

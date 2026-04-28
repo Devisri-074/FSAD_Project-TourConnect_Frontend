@@ -64,10 +64,7 @@ function Signup() {
   try {
     const response = await fetch("https://fsad-tourconnect-backend.onrender.com/api/auth/signup", {
       method: "POST",
-      credentials: "include",
-      headers: {
-        "Content-Type": "application/json",
-      },
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         name: form.fullName,
         email: form.email.trim(),
@@ -76,33 +73,22 @@ function Signup() {
       }),
     });
 
-    if (response.ok) {
-      localStorage.setItem("users", JSON.stringify([...existingUsers, newUser]));
-      if (roleNeedsApproval) {
-        alert("Registration request sent to Admin! You can log in once approved.");
-      } else {
-        alert("Signup successful!");
-      }
-      navigate("/login");
+    // Always save locally regardless of backend response
+    localStorage.setItem("users", JSON.stringify([...existingUsers, newUser]));
+
+    if (roleNeedsApproval) {
+      alert("Registration request sent to Admin! You can log in once approved.");
     } else {
-      // ✅ LOCAL FALLBACK if backend returns error
-      console.warn("Backend signup failed, falling back to local storage.");
-      localStorage.setItem("users", JSON.stringify([...existingUsers, newUser]));
-      if (roleNeedsApproval) {
-        alert("Registration request sent to Admin (Local Mode)! You can log in once approved.");
-      } else {
-        alert("Signup successful! (Local Mode)");
-      }
-      navigate("/login");
+      alert("Signup successful!");
     }
+    navigate("/login");
   } catch (error) {
-    console.error(error);
-    // FALLBACK for offline demo mode
+    // Backend offline — save locally only
     localStorage.setItem("users", JSON.stringify([...existingUsers, newUser]));
     if (roleNeedsApproval) {
-      alert("Registration request sent to Admin (Offline Mode)! You can log in once approved.");
+      alert("Registration request sent to Admin! You can log in once approved.");
     } else {
-      alert("Signup successful! (Offline Mode)");
+      alert("Signup successful!");
     }
     navigate("/login");
   }
