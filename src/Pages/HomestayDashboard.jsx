@@ -110,8 +110,7 @@ function HomestayDashboard() {
 
       setReservedStays(plansWithStays);
 
-      // Fetch from backend — show all bookings with a homestay
-      fetch(`https://fsad-tourconnect-backend.onrender.com/api/bookings`, { credentials: "include" })
+      fetch(`https://fsad-tourconnect-backend.onrender.com/api/bookings`)
         .then(res => res.json())
         .then(data => {
           if (data && Array.isArray(data)) {

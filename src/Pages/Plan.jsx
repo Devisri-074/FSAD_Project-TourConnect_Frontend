@@ -188,33 +188,37 @@ function Plan() {
     localStorage.setItem("savedPlans", JSON.stringify(savedPlans));
     window.dispatchEvent(new Event("bookingUpdated"));
 
-    const guideNameFromStorage =
-      localStorage.getItem(`guideName_${city.toLowerCase().trim()}`) || "N/A";
+    const bookingPayload = {
+      city: city,
+      homestayName: localStorage.getItem(`homestayName_${city.toLowerCase().trim()}`) || "N/A",
+      guideName: localStorage.getItem(`guideName_${city.toLowerCase().trim()}`) || "N/A",
+      userEmail: currentUser.email,
+      startDate: startDate,
+      endDate: endDate,
+      homestayPrice: Number(localStorage.getItem(`homestayPrice_${city.toLowerCase().trim()}`)) || 0,
+      guidePrice: Number(localStorage.getItem(`guidePrice_${city.toLowerCase().trim()}`)) || 0,
+      hostId: Number(localStorage.getItem(`hostId_${city.toLowerCase().trim()}`)) || 2,
+      guideUserId: Number(localStorage.getItem(`guideUserId_${city.toLowerCase().trim()}`)) || 3,
+      status: "PENDING",
+    };
 
-    const homestayNameFromStorage =
-      localStorage.getItem(`homestayName_${city.toLowerCase().trim()}`) || "N/A";
-
-    try {
-      await fetch("https://fsad-tourconnect-backend.onrender.com/api/bookings", {
-        method: "POST",
-        credentials: "include",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          city: city,
-          homestayName: homestayNameFromStorage,
-          guideName: guideNameFromStorage,
-          userEmail: currentUser.email,
-          startDate: startDate,
-          endDate: endDate,
-          homestayPrice: homestayPrice,
-          guidePrice: guidePrice,
-          hostId: Number(localStorage.getItem(`hostId_${city.toLowerCase().trim()}`)) || 4,
-          status: "PENDING",
-        }),
-      });
-    } catch (error) {
-      console.warn("Backend offline, plan saved locally.");
-    }
+    // Save to backend with retry
+    const saveToBackend = async () => {
+      for (let attempt = 1; attempt <= 3; attempt++) {
+        try {
+          const res = await fetch("https://fsad-tourconnect-backend.onrender.com/api/bookings", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(bookingPayload),
+          });
+          if (res.ok) return;
+        } catch (e) {
+          if (attempt === 3) console.warn("Backend save failed after 3 attempts");
+          else await new Promise(r => setTimeout(r, 2000));
+        }
+      }
+    };
+    saveToBackend();
 
     setPopupMessage("Plan Saved Successfully!");
     setShowPopup(true);

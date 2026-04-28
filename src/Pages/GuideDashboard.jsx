@@ -62,8 +62,7 @@ function GuideDashboard() {
     // Load offline tours safely first
     mergeGuideTours(bookingsData, true);
 
-    // Fetch from backend — show all bookings with a guide
-    fetch("https://fsad-tourconnect-backend.onrender.com/api/bookings", { credentials: "include" })
+    fetch("https://fsad-tourconnect-backend.onrender.com/api/bookings")
       .then(res => res.json())
       .then(data => {
         if (data && Array.isArray(data)) {
