@@ -97,7 +97,7 @@ export const citiesByState = {
       name: "Kanyakumari",
       slug: "kanyakumari",
       stateName: "Tamil Nadu",
-      image: "https://upload.wikimedia.org/wikipedia/commons/thumb/4/47/Kanyakumari_-_Vivekananda_Rock_Memorial.jpg/1280px-Kanyakumari_-_Vivekananda_Rock_Memorial.jpg",
+      image: "https://images.unsplash.com/photo-1582510003544-4d00b7f74220?auto=format&fit=crop&q=80&w=2070",
       attractions: 6,
       homestays: 2,
       knownFor: "Southernmost Tip of India",
