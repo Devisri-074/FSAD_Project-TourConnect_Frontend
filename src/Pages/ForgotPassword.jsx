@@ -33,7 +33,7 @@ function ForgotPassword() {
     setLoading(true);
 
     try {
-      const res = await fetch(`/api/auth/send-otp?email=${encodeURIComponent(email)}`, {
+      const res = await fetch(`https://fsad-tourconnect-backend.onrender.com/api/auth/send-otp?email=${encodeURIComponent(email)}`, {
         method: "GET",
         credentials: "include"
       });
@@ -63,7 +63,7 @@ function ForgotPassword() {
     setLoading(true);
 
     try {
-      const res = await fetch(`/api/auth/verify-otp?email=${encodeURIComponent(email)}&otp=${encodeURIComponent(otp)}`, {
+      const res = await fetch(`https://fsad-tourconnect-backend.onrender.com/api/auth/verify-otp?email=${encodeURIComponent(email)}&otp=${encodeURIComponent(otp)}`, {
         method: "POST",
         credentials: "include"
       });
@@ -101,7 +101,7 @@ function ForgotPassword() {
     setLoading(true);
     try {
       const res = await fetch(
-        `/api/auth/reset-password?email=${encodeURIComponent(targetEmail)}&newPassword=${encodeURIComponent(newPassword)}`,
+        `https://fsad-tourconnect-backend.onrender.com/api/auth/reset-password?email=${encodeURIComponent(targetEmail)}&newPassword=${encodeURIComponent(newPassword)}`,
         {
           method: "POST",
           credentials: "include"

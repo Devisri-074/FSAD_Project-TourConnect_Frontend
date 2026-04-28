@@ -62,7 +62,7 @@ function Signup() {
   };
 
   try {
-    const response = await fetch("/api/auth/signup", {
+    const response = await fetch("https://fsad-tourconnect-backend.onrender.com/api/auth/signup", {
       method: "POST",
       credentials: "include",
       headers: {
