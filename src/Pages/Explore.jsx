@@ -13,6 +13,12 @@ function Explore() {
     return JSON.parse(localStorage.getItem("availableCities")) || [];
   });
 
+  useEffect(() => {
+    const sync = () => setAvailableCities(JSON.parse(localStorage.getItem("availableCities")) || []);
+    window.addEventListener("storage", sync);
+    return () => window.removeEventListener("storage", sync);
+  }, []);
+
   const hardcodedCities = Object.entries(citiesByState).flatMap(
     ([stateSlug, cities]) =>
       cities.map((city) => ({
@@ -21,35 +27,27 @@ function Explore() {
       }))
   );
 
-  // ✅ MERGE & FILTER ADMIN CITIES (Structured)
-  const localAdminData = JSON.parse(localStorage.getItem("admin_cities") || "{}");
-  const blacklisted = JSON.parse(localStorage.getItem("blacklisted_cities") || "[]");
+  // Read admin-added cities from availableCities (saved by AdminDashboard)
+  const adminCities = JSON.parse(localStorage.getItem("availableCities") || "[]");
+  const adminCitiesMapped = adminCities
+    .filter(c => c.name && !hardcodedCities.find(h => h.name.toLowerCase() === c.name.toLowerCase()))
+    .map(c => ({
+      name: c.name,
+      slug: c.slug || c.name.toLowerCase().replace(/\s+/g, '-'),
+      stateName: c.state || "India",
+      stateSlug: (c.state || "india").toLowerCase().replace(/\s+/g, ''),
+      image: c.image || "https://images.unsplash.com/photo-1464822759023-fed622ff2c3b?auto=format&fit=crop&q=80&w=2070",
+      attractions: c.attractions || 0,
+      homestays: c.homestays || 0,
+      knownFor: c.knownFor || ""
+    }));
 
-  const localCitiesList = Object.entries(localAdminData).flatMap(([stateSlug, cities]) => 
-    cities.map(city => ({
-      ...city,
-      stateSlug,
-      image: city.image || "https://images.unsplash.com/photo-1464822759023-fed622ff2c3b?auto=format&fit=crop&q=80&w=2070",
-      attractions: city.attractions || 0,
-      homestays: city.homestays || 0
-    }))
-  );
-
-  // Merge: local overwrites hardcoded
-  const merged = hardcodedCities.map(h => {
-    const localVersion = localCitiesList.find(l => l.slug === h.slug);
-    return localVersion || h;
-  });
-
-  // Add truly new local cities
-  const trulyNewLocal = localCitiesList.filter(l => !hardcodedCities.find(hc => hc.slug === l.slug));
-
-  const allCities = [...merged, ...trulyNewLocal].filter(c => !blacklisted.includes(c.slug));
+  const allCities = [...hardcodedCities, ...adminCitiesMapped];
 
   const filteredCities = allCities.filter(
     (city) =>
       city.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      city.stateName.toLowerCase().includes(searchQuery.toLowerCase())
+      (city.stateName || "").toLowerCase().includes(searchQuery.toLowerCase())
   );
 
   return (
