@@ -26,7 +26,7 @@ function Homestay() {
     };
 
     // Fetch approved from DB — source of truth
-    fetch("http://localhost:8080/api/homestays/approved", { credentials: "include" })
+    fetch("https://fsad-tourconnect-backend.onrender.com/api/homestays/approved", { credentials: "include" })
       .then(res => res.json())
       .then(data => {
         if (!Array.isArray(data)) return;
@@ -61,12 +61,12 @@ function Homestay() {
 
   const safeCity = city ? city.toLowerCase().trim() : "";
   const cityCustomHomestays = customHomestays.filter(s => {
-      if (!s) return false;
-      const sCity = (s.city || "").toLowerCase().trim();
-      const sSlug = (s.citySlug || "").toLowerCase().trim();
-      
-      return (s.approvalStatus === "approved" || s.status === "approved") && 
-             (sCity.includes(safeCity) || safeCity.includes(sCity) || sSlug === safeCity);
+    if (!s) return false;
+    const sCity = (s.city || "").toLowerCase().trim();
+    const sSlug = (s.citySlug || "").toLowerCase().trim();
+
+    return (s.approvalStatus === "approved" || s.status === "approved") &&
+      (sCity.includes(safeCity) || safeCity.includes(sCity) || sSlug === safeCity);
   });
   const homestays = [...(homestaysByCity[safeCity] || []), ...cityCustomHomestays];
 
@@ -237,11 +237,10 @@ function Homestay() {
 
                       setShowPopup(true);
                     }}
-                    className={`mt-4 w-full py-2 rounded-lg text-white ${
-                      isBooked
+                    className={`mt-4 w-full py-2 rounded-lg text-white ${isBooked
                         ? "bg-gray-400 cursor-not-allowed"
                         : "bg-yellow-500 hover:bg-yellow-600"
-                    }`}
+                      }`}
                   >
                     {isBooked ? "Already Booked" : "Book Now"}
                   </button>

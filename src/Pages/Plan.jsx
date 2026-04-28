@@ -127,8 +127,8 @@ function Plan() {
     }
 
     const storedUserRaw = localStorage.getItem("user");
-    const currentUser = (storedUserRaw && storedUserRaw !== "null" && storedUserRaw !== "undefined") 
-      ? JSON.parse(storedUserRaw) 
+    const currentUser = (storedUserRaw && storedUserRaw !== "null" && storedUserRaw !== "undefined")
+      ? JSON.parse(storedUserRaw)
       : null;
 
     if (!currentUser || !currentUser.email) {
@@ -153,37 +153,37 @@ function Plan() {
     }
 
     const newPlan = {
-  id: planId,
+      id: planId,
 
-  city,
-  selectedPlaces,
-  startDate,
-  endDate,
+      city,
+      selectedPlaces,
+      startDate,
+      endDate,
 
-  userEmail: currentUser.email,
+      userEmail: currentUser.email,
 
-  // 🔥 ADD THIS (VERY IMPORTANT)
-  homestayName:
-    localStorage.getItem(`homestayName_${city.toLowerCase().trim()}`) || "N/A",
+      // 🔥 ADD THIS (VERY IMPORTANT)
+      homestayName:
+        localStorage.getItem(`homestayName_${city.toLowerCase().trim()}`) || "N/A",
 
-  guideName:
-    localStorage.getItem(`guideName_${city.toLowerCase().trim()}`) || "N/A",
+      guideName:
+        localStorage.getItem(`guideName_${city.toLowerCase().trim()}`) || "N/A",
 
-  homestayPrice:
-    Number(localStorage.getItem(`homestayPrice_${city.toLowerCase().trim()}`)) || 0,
+      homestayPrice:
+        Number(localStorage.getItem(`homestayPrice_${city.toLowerCase().trim()}`)) || 0,
 
-  guidePrice:
-    Number(localStorage.getItem(`guidePrice_${city.toLowerCase().trim()}`)) || 0,
+      guidePrice:
+        Number(localStorage.getItem(`guidePrice_${city.toLowerCase().trim()}`)) || 0,
 
-  // Always store IDs — fallback to default host(4) and guide(5) for hardcoded entries
-  hostId: Number(localStorage.getItem(`hostId_${city.toLowerCase().trim()}`)) || 4,
-  guideUserId: Number(localStorage.getItem(`guideUserId_${city.toLowerCase().trim()}`)) || 5,
+      // Always store IDs — fallback to default host(4) and guide(5) for hardcoded entries
+      hostId: Number(localStorage.getItem(`hostId_${city.toLowerCase().trim()}`)) || 4,
+      guideUserId: Number(localStorage.getItem(`guideUserId_${city.toLowerCase().trim()}`)) || 5,
 
-  // 🔥 ADD THIS (IMPORTANT FOR HOST)
-  status: "pending",
+      // 🔥 ADD THIS (IMPORTANT FOR HOST)
+      status: "pending",
 
-  createdAt: new Date().toISOString(),
-};
+      createdAt: new Date().toISOString(),
+    };
     savedPlans.push(newPlan);
     localStorage.setItem("savedPlans", JSON.stringify(savedPlans));
 
@@ -194,7 +194,7 @@ function Plan() {
       localStorage.getItem(`homestayName_${city.toLowerCase().trim()}`) || "N/A";
 
     try {
-      await fetch("http://localhost:8080/api/bookings", {
+      await fetch("https://fsad-tourconnect-backend.onrender.com/api/bookings", {
         method: "POST",
         credentials: "include",
         headers: { "Content-Type": "application/json" },
@@ -345,8 +345,8 @@ function Plan() {
 
                 // ✅ 2. CHECK LOGIN
                 const storedUserRaw = localStorage.getItem("user");
-                const currentUser = (storedUserRaw && storedUserRaw !== "null" && storedUserRaw !== "undefined") 
-                  ? JSON.parse(storedUserRaw) 
+                const currentUser = (storedUserRaw && storedUserRaw !== "null" && storedUserRaw !== "undefined")
+                  ? JSON.parse(storedUserRaw)
                   : null;
 
                 if (!currentUser || !currentUser.email) {
@@ -392,8 +392,8 @@ function Plan() {
 
                 // ✅ 2. CHECK LOGIN
                 const storedUserRaw = localStorage.getItem("user");
-                const currentUser = (storedUserRaw && storedUserRaw !== "null" && storedUserRaw !== "undefined") 
-                  ? JSON.parse(storedUserRaw) 
+                const currentUser = (storedUserRaw && storedUserRaw !== "null" && storedUserRaw !== "undefined")
+                  ? JSON.parse(storedUserRaw)
                   : null;
 
                 if (!currentUser || !currentUser.email) {

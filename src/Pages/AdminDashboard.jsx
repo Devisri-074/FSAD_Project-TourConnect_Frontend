@@ -40,11 +40,11 @@ function AdminDashboard() {
 
       // Always sync localStorage users from DB — overwrite with canonical list
       const storedUsers = [
-         { id: 3,  fullName: "Admin User",        email: "admin@test.com",              role: "admin",   approvalStatus: "approved" },
-         { id: 4,  fullName: "Host User",          email: "host@test.com",               role: "host",    approvalStatus: "approved" },
-         { id: 5,  fullName: "Guide User",         email: "guide@test.com",              role: "guide",   approvalStatus: "approved" },
-         { id: 11, fullName: "Shaik Mahiyabanu",   email: "shaikmahiyabanu@gmail.com",   role: "tourist", approvalStatus: "approved" },
-         { id: 12, fullName: "AI Student",         email: "2400033282.ai@gmail.com",     role: "tourist", approvalStatus: "approved" }
+         { id: 3, fullName: "Admin User", email: "admin@test.com", role: "admin", approvalStatus: "approved" },
+         { id: 4, fullName: "Host User", email: "host@test.com", role: "host", approvalStatus: "approved" },
+         { id: 5, fullName: "Guide User", email: "guide@test.com", role: "guide", approvalStatus: "approved" },
+         { id: 11, fullName: "Shaik Mahiyabanu", email: "shaikmahiyabanu@gmail.com", role: "tourist", approvalStatus: "approved" },
+         { id: 12, fullName: "AI Student", email: "2400033282.ai@gmail.com", role: "tourist", approvalStatus: "approved" }
       ];
       localStorage.setItem("users", JSON.stringify(storedUsers));
 
@@ -160,7 +160,7 @@ function AdminDashboard() {
          .catch(() => setBackendStatus("offline"));
 
       // FETCH FROM BACKEND — replace local list with DB truth
-      fetch("http://localhost:8080/api/users", { credentials: "include" })
+      fetch("https://fsad-tourconnect-backend.onrender.com/api/users", { credentials: "include" })
          .then(res => res.json())
          .then(data => {
             if (data && Array.isArray(data) && data.length > 0) {
@@ -175,7 +175,7 @@ function AdminDashboard() {
             }
          }).catch(err => console.error("Admin user sync failed:", err));
 
-      fetch("http://localhost:8080/api/bookings", { credentials: "include" })
+      fetch("https://fsad-tourconnect-backend.onrender.com/api/bookings", { credentials: "include" })
          .then(res => res.json())
          .then(data => {
             if (data && Array.isArray(data)) {
@@ -188,7 +188,7 @@ function AdminDashboard() {
             }
          }).catch(err => console.error("Admin bookings sync failed:", err));
 
-      fetch("http://localhost:8080/api/homestays", { credentials: "include" })
+      fetch("https://fsad-tourconnect-backend.onrender.com/api/homestays", { credentials: "include" })
          .then(res => res.json())
          .then(data => {
             if (data && Array.isArray(data)) {
@@ -249,7 +249,7 @@ function AdminDashboard() {
          // Step 1: Save/update in DB — always POST fresh to guarantee it's stored
          let dbId = null;
          try {
-            const postRes = await fetch("http://localhost:8080/api/homestays", {
+            const postRes = await fetch("https://fsad-tourconnect-backend.onrender.com/api/homestays", {
                method: "POST",
                credentials: "include",
                headers: { "Content-Type": "application/json" },
@@ -337,11 +337,11 @@ function AdminDashboard() {
          // If it was already in DB, update its status
          const numericId = Number(id);
          if (!isNaN(numericId) && numericId > 0 && String(numericId) === String(id)) {
-            fetch(`http://localhost:8080/api/homestays/${numericId}/status`, {
+            fetch(`https://fsad-tourconnect-backend.onrender.com/api/homestays/${numericId}/status`, {
                method: "PUT", credentials: "include",
                headers: { "Content-Type": "application/json" },
                body: JSON.stringify({ status: "REJECTED" })
-            }).catch(() => {});
+            }).catch(() => { });
          }
 
          window.dispatchEvent(new Event("storage"));
@@ -369,7 +369,7 @@ function AdminDashboard() {
          window.dispatchEvent(new Event("storage"));
 
          const targetUser = updatedUsers.find(u => u.email.trim().toLowerCase() === searchEmail);
-         fetch(`http://localhost:8080/api/users/${targetUser.id || searchEmail}/status`, {
+         fetch(`https://fsad-tourconnect-backend.onrender.com/api/users/${targetUser.id || searchEmail}/status`, {
             method: "PUT",
             credentials: "include",
             headers: { "Content-Type": "application/json" },
@@ -405,9 +405,9 @@ function AdminDashboard() {
       // Sync delete to DB
       const numericId = Number(id);
       if (!isNaN(numericId) && numericId > 0) {
-         fetch(`http://localhost:8080/api/homestays/${numericId}`, {
+         fetch(`https://fsad-tourconnect-backend.onrender.com/api/homestays/${numericId}`, {
             method: "DELETE", credentials: "include"
-         }).catch(() => {});
+         }).catch(() => { });
       }
    };
 
